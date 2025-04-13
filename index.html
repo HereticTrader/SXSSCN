@@ -8,8 +8,8 @@
     body { background: black; color: white; font-family: monospace; padding: 2rem; }
     h1 { text-align: center; color: #00ffff; }
     input, button { font-size: 1rem; padding: 0.3rem 0.6rem; margin-top: 0.5rem; }
-    table { width: 100%; margin-top: 2rem; border-collapse: collapse; }
-    th, td { padding: 0.6rem; text-align: center; border: 1px solid #444; }
+    table { width: 100%; margin-top: 1rem; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { padding: 0.4rem; text-align: center; border: 1px solid #444; }
     th { background: #111; color: yellow; }
     .god { background-color: #002200; color: #00ff00; font-weight: bold; }
     .strong { background-color: #222200; color: #ffff00; font-weight: bold; }
@@ -54,7 +54,8 @@
     async function scan() {
       const list = document.getElementById("symbols").value.split(",").map(s => s.trim().toUpperCase());
       const tbody = document.getElementById("results");
-      
+
+      const newRows = [];
 
       for (let symbol of list) {
         const data = await fetch1m(symbol);
@@ -79,17 +80,18 @@
           signal = "STRONG ✅";
           css = "strong";
         } else if (ema2 > ema8 && ema8 > ema13) {
-        signal = "OK SIGNAL ⚠️";
-        css = "ok";
+          signal = "OK SIGNAL ⚠️";
+          css = "ok";
+        }
+
+        const row = `<tr id="row-${symbol}" class="${css}"><td>${symbol}</td><td>${signal || ""}</td><td>${close.toFixed(6)}</td></tr>`;
+        newRows.push(row);
       }
 
-        const row = `<tr class="${css}"><td>${symbol}</td><td>${signal || ""}</td><td>${close.toFixed(6)}</td></tr>`;
-        document.querySelector(`#row-${symbol}`)?.remove();
-        tbody.insertAdjacentHTML("beforeend", `<tr id="row-${symbol}" class="${css}"><td>${symbol}</td><td>${signal || ""}</td><td>${close.toFixed(6)}</td></tr>`);
-      }
+      tbody.innerHTML = newRows.join("");
     }
 
-    setInterval(scan, 3000);
+    setInterval(scan, 5000);
     scan();
   </script>
 </body>
