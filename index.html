@@ -15,6 +15,7 @@
     .god { background-color: #000f0f; color: #00ffff; font-weight: bold; }
     .strong { background-color: #0f0f00; color: #ff00ff; font-weight: bold; }
     .ok { background-color: #111122; color: #8888ff; font-weight: bold; }
+    .deltaSpike::after { content: ' ⚡'; color: yellow; }
   </style>
 </head>
 <body>
@@ -49,7 +50,7 @@
       try {
         const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=250`);
         const raw = await res.json();
-        return raw.map(c => parseFloat(c[4])); // use close price
+        return raw.map(c => ({ close: parseFloat(c[4]), buyVol: parseFloat(c[9]) }));
       } catch {
         return [];
       }
@@ -58,21 +59,22 @@
     async function scan() {
       const list = document.getElementById("symbols").value.split(",").map(s => s.trim().toUpperCase());
       const tbody = document.getElementById("results");
-
       const newRows = [];
 
       for (let symbol of list) {
-        const data = await fetch1m(symbol);
-        if (data.length < 233) continue;
+        const raw = await fetch1m(symbol);
+        if (raw.length < 233) continue;
+        const closePrices = raw.map(r => r.close);
+        const volume = raw.map(r => r.buyVol);
 
-        const close = data.at(-1);
-        const ema2 = EMA(data, 2).at(-1);
-        const ema8 = EMA(data, 8).at(-1);
-        const ema13 = EMA(data, 13).at(-1);
-        const ema34 = EMA(data, 34).at(-1);
-        const ema55 = EMA(data, 55).at(-1);
-        const ema144 = EMA(data, 144).at(-1);
-        const ema233 = EMA(data, 233).at(-1);
+        const close = closePrices.at(-1);
+        const ema2 = EMA(closePrices, 2).at(-1);
+        const ema8 = EMA(closePrices, 8).at(-1);
+        const ema13 = EMA(closePrices, 13).at(-1);
+        const ema34 = EMA(closePrices, 34).at(-1);
+        const ema55 = EMA(closePrices, 55).at(-1);
+        const ema144 = EMA(closePrices, 144).at(-1);
+        const ema233 = EMA(closePrices, 233).at(-1);
 
         let signal = "";
         let css = "";
@@ -88,7 +90,9 @@
           css = "ok";
         }
 
-        const row = `<tr id="row-${symbol}" class="${css}"><td>${symbol}</td><td>${signal || ""}</td><td>${close.toFixed(6)}</td></tr>`;
+        const deltaSpike = volume.at(-1) > volume.at(-2) * 2 ? ' deltaSpike' : '';
+
+        const row = `<tr id="row-${symbol}" class="${css}${deltaSpike}"><td>${symbol}</td><td>${signal}</td><td>${close.toFixed(6)}</td></tr>`;
         newRows.push(row);
       }
 
