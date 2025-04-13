@@ -54,7 +54,7 @@
     async function scan() {
       const list = document.getElementById("symbols").value.split(",").map(s => s.trim().toUpperCase());
       const tbody = document.getElementById("results");
-      tbody.innerHTML = "";
+      
 
       for (let symbol of list) {
         const data = await fetch1m(symbol);
@@ -83,10 +83,9 @@
         css = "ok";
       }
 
-        if (signal) {
-          const row = `<tr class="${css}"><td>${symbol}</td><td>${signal}</td><td>${close.toFixed(6)}</td></tr>`;
-          tbody.innerHTML += row;
-        }
+        const row = `<tr class="${css}"><td>${symbol}</td><td>${signal || ""}</td><td>${close.toFixed(6)}</td></tr>`;
+        document.querySelector(`#row-${symbol}`)?.remove();
+        tbody.insertAdjacentHTML("beforeend", `<tr id="row-${symbol}" class="${css}"><td>${symbol}</td><td>${signal || ""}</td><td>${close.toFixed(6)}</td></tr>`);
       }
     }
 
