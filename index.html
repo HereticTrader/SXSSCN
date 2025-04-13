@@ -1,1 +1,98 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SXSSCN GOD MODE Radar</title>
+  <style>
+    body { background: black; color: white; font-family: monospace; padding: 2rem; }
+    h1 { text-align: center; color: #00ffff; }
+    input, button { font-size: 1rem; padding: 0.3rem 0.6rem; margin-top: 0.5rem; }
+    table { width: 100%; margin-top: 2rem; border-collapse: collapse; }
+    th, td { padding: 0.6rem; text-align: center; border: 1px solid #444; }
+    th { background: #111; color: yellow; }
+    .god { background-color: #002200; color: #00ff00; font-weight: bold; }
+    .strong { background-color: #222200; color: #ffff00; font-weight: bold; }
+    .ok { background-color: #111122; color: #00ffff; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>SXSSCN - GOD MODE EMA SCANNER</h1>
+
+  <label for="symbols">Paste Symbols (comma separated):</label><br>
+  <input type="text" id="symbols" style="width: 100%;" value="BTCUSDT,ALCHUSDT,ARCHUSDT,FUNUSDT,TSTUSDT,TRUMPUSDT,XRPUSDT" />
+  <button onclick="scan()">🔍 Scan Now</button>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Symbol</th>
+        <th>Status</th>
+        <th>Last Price</th>
+      </tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <script>
+    const EMA = (data, length) => {
+      const k = 2 / (length + 1);
+      let ema = data[0];
+      return data.map((val, i) => i === 0 ? ema : ema = val * k + ema * (1 - k));
+    };
+
+    async function fetch1m(symbol) {
+      try {
+        const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=250`);
+        const raw = await res.json();
+        return raw.map(c => parseFloat(c[4])); // use close price
+      } catch {
+        return [];
+      }
+    }
+
+    async function scan() {
+      const list = document.getElementById("symbols").value.split(",").map(s => s.trim().toUpperCase());
+      const tbody = document.getElementById("results");
+      tbody.innerHTML = "";
+
+      for (let symbol of list) {
+        const data = await fetch1m(symbol);
+        if (data.length < 233) continue;
+
+        const close = data.at(-1);
+        const ema2 = EMA(data, 2).at(-1);
+        const ema8 = EMA(data, 8).at(-1);
+        const ema13 = EMA(data, 13).at(-1);
+        const ema34 = EMA(data, 34).at(-1);
+        const ema55 = EMA(data, 55).at(-1);
+        const ema144 = EMA(data, 144).at(-1);
+        const ema233 = EMA(data, 233).at(-1);
+
+        let signal = "";
+        let css = "";
+
+        if (close > ema2 && ema2 > ema8 && ema8 > ema13 && ema13 > ema34 && ema34 > ema55 && ema55 > ema144 && ema144 > ema233) {
+          signal = "GOD MODE ✅";
+          css = "god";
+        } else if (close > ema2 && ema2 > ema8 && ema8 > ema13 && ema13 > ema34 && ema34 > ema55) {
+          signal = "STRONG ✅";
+          css = "strong";
+        } else if (close > ema2 && ema2 > ema8 && ema8 > ema13) {
+          signal = "OK SIGNAL ⚠️";
+          css = "ok";
+        }
+
+        if (signal) {
+          const row = `<tr class="${css}"><td>${symbol}</td><td>${signal}</td><td>${close.toFixed(6)}</td></tr>`;
+          tbody.innerHTML += row;
+        }
+      }
+    }
+
+    setInterval(scan, 5000);
+    scan();
+  </script>
+</body>
+</html>
