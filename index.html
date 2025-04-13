@@ -5,22 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SXSSCN GOD MODE Radar</title>
   <style>
-    body { background: black; color: white; font-family: monospace; padding: 2rem; }
+    body { background: #000; color: white; font-family: monospace; padding: 2rem; }
     h1 { text-align: center; color: #00ffff; }
     input, button { font-size: 1rem; padding: 0.3rem 0.6rem; margin-top: 0.5rem; }
-    table { width: 600px; margin-top: 1rem; border-collapse: collapse; font-size: 0.85rem; margin-left: auto; margin-right: auto; }
+    #tableWidth { width: 60px; }
+    table { width: var(--table-width, 600px); margin-top: 1rem; border-collapse: collapse; font-size: 0.85rem; margin-left: auto; margin-right: auto; }
     th, td { padding: 0.4rem; text-align: center; border: 1px solid #444; }
     th { background: #111; color: yellow; }
-    .god { background-color: #002200; color: #00ff00; font-weight: bold; }
-    .strong { background-color: #222200; color: #ffff00; font-weight: bold; }
-    .ok { background-color: #111122; color: #00ffff; font-weight: bold; }
+    .god { background-color: #000f0f; color: #00ffff; font-weight: bold; }
+    .strong { background-color: #0f0f00; color: #ff00ff; font-weight: bold; }
+    .ok { background-color: #111122; color: #8888ff; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h1>SXSSCN - GOD MODE EMA SCANNER</h1>
+  <h1>SXSSCN - SUPER STRONG EMA SCANNER</h1>
 
   <label for="symbols">Paste Symbols (comma separated):</label><br>
   <input type="text" id="symbols" style="width: 100%;" value="BTCUSDT,ALCHUSDT,ARCHUSDT,FUNUSDT,TSTUSDT,TRUMPUSDT,XRPUSDT" />
+  <br>
+  <label for="tableWidth">Table Width:</label>
+  <input type="number" id="tableWidth" value="600" oninput="document.documentElement.style.setProperty('--table-width', this.value + 'px')">
   <button onclick="scan()">🔍 Scan Now</button>
 
   <table>
@@ -74,13 +78,13 @@
         let css = "";
 
         if (close > ema2 && ema2 > ema8 && ema8 > ema13 && ema13 > ema34 && ema34 > ema55 && ema55 > ema144 && ema144 > ema233) {
-          signal = "GOD MODE ✅";
+          signal = "SUPER STRONG ✅";
           css = "god";
         } else if (close > ema2 && ema2 > ema8 && ema8 > ema13 && ema13 > ema34 && ema34 > ema55) {
           signal = "STRONG ✅";
           css = "strong";
         } else if (ema2 > ema8 && ema8 > ema13) {
-          signal = "OK SIGNAL ⚠️";
+          signal = "NORMAL ⚠️";
           css = "ok";
         }
 
