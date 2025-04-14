@@ -73,15 +73,15 @@
 
   <div style="display: flex; justify-content: center; gap: 2rem; margin-bottom: 2rem;">
     <div style="text-align: center;">
-      <canvas id="chart1" width="450" height="420"></canvas>
+      <canvas id="chart1"></canvas>
       <div id="signal1" style="margin-top: 0.5rem; font-weight: bold;">...</div>
     </div>
     <div style="text-align: center;">
-      <canvas id="chart2" width="450" height="420"></canvas>
+      <canvas id="chart2"></canvas>
       <div id="signal2" style="margin-top: 0.5rem; font-weight: bold;">...</div>
     </div>
     <div style="text-align: center;">
-      <canvas id="chart3" width="450" height="420"></canvas>
+      <canvas id="chart3"></canvas>
       <div id="signal3" style="margin-top: 0.5rem; font-weight: bold;">...</div>
     </div>
   </div>
@@ -92,8 +92,8 @@
       const h = parseInt(document.getElementById("chartHeight").value);
       for (let i = 1; i <= 3; i++) {
         const canvas = document.getElementById(`chart${i}`);
-        canvas.width = w;
-        canvas.height = h;
+        canvas.setAttribute("width", w);
+        canvas.setAttribute("height", h);
       }
       applySettings();
     }
