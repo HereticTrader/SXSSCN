@@ -242,7 +242,7 @@
       ctx.fillText("L: " + Math.min(...lows).toFixed(4), 10, canvas.height - 10);
     }
 
-    async function render(symbol = "BTCUSDT") {
+    async function render(symbol = "ALCHUSDT") {
       const intervals = ["1m", "5m", "15m"];
       for (let i = 0; i < intervals.length; i++) {
         const data = await fetchKlines(symbol, intervals[i]);
