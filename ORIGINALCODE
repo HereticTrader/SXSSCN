@@ -21,7 +21,7 @@
   <h1>SXSSCN - SUPER STRONG EMA SCANNER</h1>
 
   <label for="symbols">Paste Symbols (comma separated):</label><br>
-  <input type="text" id="symbols" style="width: 100%;" value="BTCUSDT,ALCHUSDT,ARCHUSDT,FUNUSDT,TSTUSDT,TRUMPUSDT,XRPUSDT" />
+  <input type="text" id="symbols" style="width: 100%;" value="BTCUSDT,ALCHUSDT,ARCUSDT,FUNUSDT,TSTUSDT,TRUMPUSDT,XRPUSDT" />
   <br>
   <label for="tableWidth">Table Width:</label>
   <input type="number" id="tableWidth" value="600" oninput="document.documentElement.style.setProperty('--table-width', this.value + 'px')">
@@ -77,17 +77,25 @@
         let signal = "";
         let css = "";
 
-        if (close > ema2 && ema2 > ema8 && ema8 > ema13 && ema13 > ema34 && ema34 > ema55 && ema55 > ema144 && ema144 > ema233) {
-          signal = "SUPER STRONG ✅";
+      if (close > ema2 && ema2 > ema8 && ema8 > ema13 && ema13 > ema34 && ema34 > ema55 && ema55 > ema144 && ema144 > ema233) {
+          signal = '<span class="ema-long">EMA LONG **</span>';
           css = "god";
         } else if (close > ema2 && ema2 > ema8 && ema8 > ema13 && ema13 > ema34 && ema34 > ema55) {
-          signal = "STRONG ✅";
+          signal = '<span class="ema-long">EMA LONG *</span>';
           css = "strong";
         } else if (ema2 > ema8 && ema8 > ema13) {
-          signal = "NORMAL ⚠️";
+          signal = '<span class="ema-long">EMA LONG</span>';
+          css = "ok";
+        } else if (close < ema2 && ema2 < ema8 && ema8 < ema13 && ema13 < ema34 && ema34 < ema55 && ema55 < ema144 && ema144 < ema233) {
+          signal = '<span class="ema-short">EMA SHORT **</span>';
+          css = "god";
+        } else if (close < ema2 && ema2 < ema8 && ema8 < ema13 && ema13 < ema34 && ema34 < ema55) {
+          signal = '<span class="ema-short">EMA SHORT *</span>';
+          css = "strong";
+        } else if (ema2 < ema8 && ema8 < ema13) {
+          signal = '<span class="ema-short">EMA SHORT</span>';
           css = "ok";
         }
-
         const row = `<tr id="row-${symbol}" class="${css}"><td>${symbol}</td><td>${signal || ""}</td><td>${close.toFixed(6)}</td></tr>`;
         newRows.push(row);
       }
