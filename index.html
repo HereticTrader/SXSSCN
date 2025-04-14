@@ -15,6 +15,8 @@
     .god { background-color: #000f0f; color: #00ffff; font-weight: bold; }
     .strong { background-color: #0f0f00; color: #ff00ff; font-weight: bold; }
     .ok { background-color: #111122; color: #8888ff; font-weight: bold; }
+    .ema-long { color: #00ffff; }
+    .ema-short { color: #ff00ff; }
     canvas { background: #111; border: 1px solid #444; display: block; margin: 1rem auto; }
   </style>
 </head>
@@ -78,22 +80,22 @@
         let css = "";
 
         if (close > ema2 && ema2 > ema8 && ema8 > ema13 && ema13 > ema34 && ema34 > ema55 && ema55 > ema144 && ema144 > ema233) {
-          signal = "EMA LONG **";
+          signal = '<span class="ema-long">EMA LONG **</span>';
           css = "god";
         } else if (close > ema2 && ema2 > ema8 && ema8 > ema13 && ema13 > ema34 && ema34 > ema55) {
-          signal = "EMA LONG *";
+          signal = '<span class="ema-long">EMA LONG *</span>';
           css = "strong";
         } else if (ema2 > ema8 && ema8 > ema13) {
-          signal = "EMA LONG";
+          signal = '<span class="ema-long">EMA LONG</span>';
           css = "ok";
         } else if (close < ema2 && ema2 < ema8 && ema8 < ema13 && ema13 < ema34 && ema34 < ema55 && ema55 < ema144 && ema144 < ema233) {
-          signal = "EMA SHORT **";
+          signal = '<span class="ema-short">EMA SHORT **</span>';
           css = "god";
         } else if (close < ema2 && ema2 < ema8 && ema8 < ema13 && ema13 < ema34 && ema34 < ema55) {
-          signal = "EMA SHORT *";
+          signal = '<span class="ema-short">EMA SHORT *</span>';
           css = "strong";
         } else if (ema2 < ema8 && ema8 < ema13) {
-          signal = "EMA SHORT";
+          signal = '<span class="ema-short">EMA SHORT</span>';
           css = "ok";
         }
 
