@@ -17,7 +17,6 @@
     .ok { background-color: #111122; color: #8888ff; font-weight: bold; }
     .ema-long { color: #00ffff; }
     .ema-short { color: #ff00ff; }
-    canvas { background: #111; border: 1px solid #444; display: block; margin: 1rem auto; }
   </style>
 </head>
 <body>
@@ -41,8 +40,6 @@
     <tbody id="results"></tbody>
   </table>
 
-  <canvas id="chart" width="1000" height="400"></canvas>
-
   <script>
     const EMA = (data, length) => {
       const k = 2 / (length + 1);
@@ -52,15 +49,9 @@
 
     async function fetch1m(symbol) {
       try {
-        const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=100`);
+        const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=250`);
         const raw = await res.json();
-        return raw.map(c => ({
-          openTime: c[0],
-          open: parseFloat(c[1]),
-          high: parseFloat(c[2]),
-          low: parseFloat(c[3]),
-          close: parseFloat(c[4])
-        }));
+        return raw.map(c => parseFloat(c[4])); // use close price
       } catch {
         return [];
       }
@@ -72,8 +63,7 @@
       const newRows = [];
 
       for (let symbol of list) {
-        const klines = await fetch1m(symbol);
-        const data = klines.map(k => k.close);
+        const data = await fetch1m(symbol);
         if (data.length < 233) continue;
 
         const close = data.at(-1);
@@ -110,47 +100,9 @@
 
         const row = `<tr id="row-${symbol}" class="${css}"><td>${symbol}</td><td>${signal}</td><td>${close.toFixed(6)}</td></tr>`;
         newRows.push(row);
-
-        if (symbol === "BTCUSDT") renderChart(klines);
       }
 
       tbody.innerHTML = newRows.join("");
-    }
-
-    function renderChart(data) {
-      const canvas = document.getElementById("chart");
-      const ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const width = canvas.width;
-      const height = canvas.height;
-      const padding = 50;
-      const candlesToShow = data.slice(-60);
-
-      const high = Math.max(...candlesToShow.map(d => d.high));
-      const low = Math.min(...candlesToShow.map(d => d.low));
-
-      const scaleY = (price) => height - ((price - low) / (high - low)) * (height - 2 * padding);
-      const candleWidth = (width - 2 * padding) / candlesToShow.length;
-
-      candlesToShow.forEach((d, i) => {
-        const x = padding + i * candleWidth;
-        const yOpen = scaleY(d.open);
-        const yClose = scaleY(d.close);
-        const yHigh = scaleY(d.high);
-        const yLow = scaleY(d.low);
-
-        const color = d.close > d.open ? "#00ff00" : "#ff0000";
-        ctx.strokeStyle = color;
-        ctx.fillStyle = color;
-
-        ctx.beginPath();
-        ctx.moveTo(x + candleWidth / 2, yHigh);
-        ctx.lineTo(x + candleWidth / 2, yLow);
-        ctx.stroke();
-
-        ctx.fillRect(x, Math.min(yOpen, yClose), candleWidth - 1, Math.abs(yClose - yOpen) || 1);
-      });
     }
 
     setInterval(scan, 5000);
