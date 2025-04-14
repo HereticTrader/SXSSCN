@@ -21,6 +21,8 @@
     .ema-short   { background-color: #110011; color: #ff00ff; font-weight: bold; }
     .ema-short-2 { background-color: #220022; color: #ff00ff; font-weight: bold; }
     .ema-short-3 { background-color: #440044; color: #ff00ff; font-weight: bold; }
+
+    canvas { display: block; background-color: black; }
   </style>
 </head>
 <body>
@@ -71,85 +73,29 @@
 
   <div style="display: flex; justify-content: center; gap: 2rem; margin-bottom: 2rem;">
     <div style="text-align: center;">
-      <canvas id="chart1"></canvas>
+      <canvas id="chart1" width="450" height="420"></canvas>
       <div id="signal1" style="margin-top: 0.5rem; font-weight: bold;">...</div>
     </div>
     <div style="text-align: center;">
-      <canvas id="chart2"></canvas>
+      <canvas id="chart2" width="450" height="420"></canvas>
       <div id="signal2" style="margin-top: 0.5rem; font-weight: bold;">...</div>
     </div>
     <div style="text-align: center;">
-      <canvas id="chart3"></canvas>
+      <canvas id="chart3" width="450" height="420"></canvas>
       <div id="signal3" style="margin-top: 0.5rem; font-weight: bold;">...</div>
     </div>
   </div>
 
   <script>
-    // ... existing code above remains unchanged ...
-
-    function drawChart(canvasId, signalId, data, ema8, ema13) {
-      const canvas = document.getElementById(canvasId);
-      const ctx = canvas.getContext("2d");
-      const padding = 40;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const w = canvas.width - 2 * padding;
-      const h = canvas.height - 2 * padding;
-      const candleWidth = w / data.length;
-      const highs = data.map(d => d.high);
-      const lows = data.map(d => d.low);
-      const max = Math.max(...highs);
-      const min = Math.min(...lows);
-      const y = p => padding + h - ((p - min) / (max - min)) * h;
-
-      const ema2 = calculateEMA(data, 2);
-      let condition = "EMA NONE";
-      if (ema2.at(-1) > ema8.at(-1) && ema8.at(-1) > ema13.at(-1)) {
-        condition = "EMA LONG ▲"; document.getElementById(signalId).style.color = "#00ff00";
-      } else if (ema2.at(-1) < ema8.at(-1) && ema8.at(-1) < ema13.at(-1)) {
-        condition = "EMA SHORT 🔻"; document.getElementById(signalId).style.color = "#ff00ff";
-      } else {
-        document.getElementById(signalId).style.color = "gray";
+    function resizeCharts() {
+      const w = parseInt(document.getElementById("chartWidth").value);
+      const h = parseInt(document.getElementById("chartHeight").value);
+      for (let i = 1; i <= 3; i++) {
+        const canvas = document.getElementById(`chart${i}`);
+        canvas.width = w;
+        canvas.height = h;
       }
-      document.getElementById(signalId).textContent = condition;
-
-      data.forEach((d, i) => {
-        const x = padding + i * candleWidth;
-        const color = ema2[i] > ema8[i] && ema8[i] > ema13[i] ? "#00ff00" : ema2[i] < ema8[i] && ema8[i] < ema13[i] ? "#ff00ff" : "gray";
-        ctx.strokeStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(x + candleWidth / 2, y(d.high));
-        ctx.lineTo(x + candleWidth / 2, y(d.low));
-        ctx.stroke();
-        ctx.fillStyle = color;
-        ctx.fillRect(x, y(Math.max(d.open, d.close)), candleWidth - 1, Math.abs(y(d.open) - y(d.close)) || 1);
-      });
-
-      function drawLine(ema, color) {
-        ctx.beginPath();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = parseFloat(document.getElementById("emaThickness").value);
-        ema.forEach((val, i) => {
-          const x = padding + i * candleWidth + candleWidth / 2;
-          const yPos = y(val);
-          if (i === 0) ctx.moveTo(x, yPos);
-          else ctx.lineTo(x, yPos);
-        });
-        ctx.stroke();
-        ctx.lineWidth = 1;
-      }
-      drawLine(ema8, "#00ffff");
-      drawLine(ema13, "#ff00ff");
-
-      const lastPrice = data.at(-1).close;
-      ctx.fillStyle = "yellow";
-      ctx.font = "bold 12px monospace";
-      ctx.textAlign = "right";
-      ctx.fillText(lastPrice.toFixed(4), canvas.width - 10, y(lastPrice));
-      ctx.fillStyle = "#888";
-      ctx.fillText("H: " + max.toFixed(4), canvas.width - 10, 20);
-      ctx.fillText("L: " + min.toFixed(4), canvas.width - 10, canvas.height - 10);
-      ctx.textAlign = "left";
+      applySettings();
     }
   </script>
 </body>
