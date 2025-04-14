@@ -24,9 +24,7 @@
   </style>
 </head>
 <body>
-
   <h1>SXSSCN - SUPER STRONG EMA SCANNER</h1>
-
   <label for="symbols">Paste Symbols (comma separated):</label><br>
   <input type="text" id="symbols" style="width: 100%;" value="BTCUSDT,ALCHUSDT,ARCUSDT,FUNUSDT,TSTUSDT,TRUMPUSDT,XRPUSDT" />
   <br>
@@ -36,11 +34,7 @@
 
   <table>
     <thead>
-      <tr>
-        <th>Symbol</th>
-        <th>Status</th>
-        <th>Last Price</th>
-      </tr>
+      <tr><th>Symbol</th><th>Status</th><th>Last Price</th></tr>
     </thead>
     <tbody id="results"></tbody>
   </table>
@@ -60,6 +54,15 @@
     <span id="thicknessLabel">2</span> px
   </div>
 
+  <div style="text-align:center; margin-bottom: 1rem;">
+    <label for="chartWidth">Chart Width:</label>
+    <input type="number" id="chartWidth" value="450" style="width: 80px;">
+    &nbsp;
+    <label for="chartHeight">Chart Height:</label>
+    <input type="number" id="chartHeight" value="420" style="width: 80px;">
+    <button onclick="resizeCharts()">Apply Size</button>
+  </div>
+
   <div style="display: flex; justify-content: center; gap: 2rem; margin-bottom: 0.5rem;">
     <div style="width: 400px; text-align: center; font-size: 0.9rem; color: yellow;">1 Minute</div>
     <div style="width: 400px; text-align: center; font-size: 0.9rem; color: yellow;">5 Minutes</div>
@@ -68,24 +71,24 @@
 
   <div style="display: flex; justify-content: center; gap: 2rem; margin-bottom: 2rem;">
     <div style="text-align: center;">
-      <canvas id="chart1" width="450" height="420"></canvas>
+      <canvas id="chart1"></canvas>
       <div id="signal1" style="margin-top: 0.5rem; font-weight: bold;">...</div>
     </div>
     <div style="text-align: center;">
-      <canvas id="chart2" width="450" height="420"></canvas>
+      <canvas id="chart2"></canvas>
       <div id="signal2" style="margin-top: 0.5rem; font-weight: bold;">...</div>
     </div>
     <div style="text-align: center;">
-      <canvas id="chart3" width="450" height="420"></canvas>
+      <canvas id="chart3"></canvas>
       <div id="signal3" style="margin-top: 0.5rem; font-weight: bold;">...</div>
     </div>
   </div>
 
   <script>
-    const EMA = (data, length) => {
-      const k = 2 / (length + 1);
+    const EMA = (data, len) => {
+      const k = 2 / (len + 1);
       let ema = data[0];
-      return data.map((val, i) => i === 0 ? ema : ema = val * k + ema * (1 - k));
+      return data.map((v, i) => i === 0 ? ema : ema = v * k + ema * (1 - k));
     };
 
     async function fetch1m(symbol) {
@@ -93,9 +96,7 @@
         const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=250`);
         const raw = await res.json();
         return raw.map(c => parseFloat(c[4]));
-      } catch {
-        return [];
-      }
+      } catch { return []; }
     }
 
     async function scan() {
@@ -116,31 +117,22 @@
         const ema144 = EMA(data, 144).at(-1);
         const ema233 = EMA(data, 233).at(-1);
 
-        let signal = "EMA NONE";
-        let css = "ema-none";
-
+        let signal = "EMA NONE", css = "ema-none";
         if (close > ema2 && ema2 > ema8 && ema8 > ema13 && ema13 > ema34 && ema34 > ema55 && ema55 > ema144 && ema144 > ema233) {
-          signal = 'EMA LONG *** <span style="color: #00ff00;">▲</span>';
-          css = "ema-long-3";
+          signal = 'EMA LONG *** <span style="color:#00ff00">▲</span>'; css = "ema-long-3";
         } else if (close > ema2 && ema2 > ema8 && ema8 > ema13 && ema13 > ema34 && ema34 > ema55) {
-          signal = 'EMA LONG **';
-          css = "ema-long-2";
+          signal = 'EMA LONG **'; css = "ema-long-2";
         } else if (ema2 > ema8 && ema8 > ema13) {
-          signal = 'EMA LONG';
-          css = "ema-long";
+          signal = 'EMA LONG'; css = "ema-long";
         } else if (close < ema2 && ema2 < ema8 && ema8 < ema13 && ema13 < ema34 && ema34 < ema55 && ema55 < ema144 && ema144 < ema233) {
-          signal = 'EMA SHORT *** 🔻';
-          css = "ema-short-3";
+          signal = 'EMA SHORT *** 🔻'; css = "ema-short-3";
         } else if (close < ema2 && ema2 < ema8 && ema8 < ema13 && ema13 < ema34 && ema34 < ema55) {
-          signal = 'EMA SHORT **';
-          css = "ema-short-2";
+          signal = 'EMA SHORT **'; css = "ema-short-2";
         } else if (ema2 < ema8 && ema8 < ema13) {
-          signal = 'EMA SHORT';
-          css = "ema-short";
+          signal = 'EMA SHORT'; css = "ema-short";
         }
 
-        const row = `<tr id="row-${symbol}" class="${css}"><td>${symbol}</td><td>${signal}</td><td>${close.toFixed(6)}</td></tr>`;
-        newRows.push(row);
+        newRows.push(`<tr class="${css}"><td>${symbol}</td><td>${signal}</td><td>${close.toFixed(6)}</td></tr>`);
       }
 
       tbody.innerHTML = newRows.join("");
@@ -166,7 +158,7 @@
     function calculateEMA(data, length) {
       const k = 2 / (length + 1);
       let ema = data[0].close;
-      return data.map((d, i) => { if (i === 0) return ema; ema = d.close * k + ema * (1 - k); return ema; });
+      return data.map((d, i) => i === 0 ? ema : ema = d.close * k + ema * (1 - k));
     }
 
     function drawChart(canvasId, signalId, data, ema8, ema13) {
@@ -178,40 +170,31 @@
       const w = canvas.width - 2 * padding;
       const h = canvas.height - 2 * padding;
       const candleWidth = w / data.length;
-
       const highs = data.map(d => d.high);
       const lows = data.map(d => d.low);
       const max = Math.max(...highs);
       const min = Math.min(...lows);
-      function y(price) { return padding + h - ((price - min) / (max - min)) * h; }
+      const y = p => padding + h - ((p - min) / (max - min)) * h;
 
       const ema2 = calculateEMA(data, 2);
       let condition = "EMA NONE";
-
       if (ema2.at(-1) > ema8.at(-1) && ema8.at(-1) > ema13.at(-1)) {
-        condition = "EMA LONG ▲";
-        document.getElementById(signalId).style.color = "#00ff00";
+        condition = "EMA LONG ▲"; document.getElementById(signalId).style.color = "#00ff00";
       } else if (ema2.at(-1) < ema8.at(-1) && ema8.at(-1) < ema13.at(-1)) {
-        condition = "EMA SHORT 🔻";
-        document.getElementById(signalId).style.color = "#ff00ff";
+        condition = "EMA SHORT 🔻"; document.getElementById(signalId).style.color = "#ff00ff";
       } else {
         document.getElementById(signalId).style.color = "gray";
       }
-
       document.getElementById(signalId).textContent = condition;
 
       data.forEach((d, i) => {
         const x = padding + i * candleWidth;
-        let color = "gray";
-        if (ema2[i] > ema8[i] && ema8[i] > ema13[i]) color = "#00ff00";
-        else if (ema2[i] < ema8[i] && ema8[i] < ema13[i]) color = "#ff00ff";
-
+        const color = ema2[i] > ema8[i] && ema8[i] > ema13[i] ? "#00ff00" : ema2[i] < ema8[i] && ema8[i] < ema13[i] ? "#ff00ff" : "gray";
         ctx.strokeStyle = color;
         ctx.beginPath();
         ctx.moveTo(x + candleWidth / 2, y(d.high));
         ctx.lineTo(x + candleWidth / 2, y(d.low));
         ctx.stroke();
-
         ctx.fillStyle = color;
         ctx.fillRect(x, y(Math.max(d.open, d.close)), candleWidth - 1, Math.abs(y(d.open) - y(d.close)) || 1);
       });
@@ -223,23 +206,20 @@
         ema.forEach((val, i) => {
           const x = padding + i * candleWidth + candleWidth / 2;
           const yPos = y(val);
-          if (i === 0) ctx.moveTo(x, yPos);
-          else ctx.lineTo(x, yPos);
+          i === 0 ? ctx.moveTo(x, yPos) : ctx.lineTo(x, yPos);
         });
         ctx.stroke();
         ctx.lineWidth = 1;
       }
-
       drawLine(ema8, "#00ffff");
       drawLine(ema13, "#ff00ff");
-
       const lastPrice = data.at(-1).close;
       ctx.fillStyle = "yellow";
       ctx.font = "bold 12px monospace";
       ctx.fillText(lastPrice.toFixed(4), canvas.width - padding - 60, y(lastPrice));
       ctx.fillStyle = "#888";
-      ctx.fillText("H: " + Math.max(...highs).toFixed(4), 10, 20);
-      ctx.fillText("L: " + Math.min(...lows).toFixed(4), 10, canvas.height - 10);
+      ctx.fillText("H: " + max.toFixed(4), 10, 20);
+      ctx.fillText("L: " + min.toFixed(4), 10, canvas.height - 10);
     }
 
     async function render(symbol = "ALCHUSDT") {
@@ -258,14 +238,27 @@
       render(symbol);
     }
 
+    function resizeCharts() {
+      const w = parseInt(document.getElementById("chartWidth").value);
+      const h = parseInt(document.getElementById("chartHeight").value);
+      for (let i = 1; i <= 3; i++) {
+        const canvas = document.getElementById(`chart${i}`);
+        canvas.width = w;
+        canvas.height = h;
+      }
+      applySettings();
+    }
+
     document.getElementById("emaThickness").addEventListener("input", () => {
       document.getElementById("thicknessLabel").textContent = document.getElementById("emaThickness").value;
     });
 
-    setInterval(scan, 5000);
-    scan();
-    applySettings();
-    setInterval(() => applySettings(), 5000);
+    window.onload = () => {
+      resizeCharts();
+      scan();
+      setInterval(scan, 5000);
+      setInterval(() => applySettings(), 5000);
+    };
   </script>
 </body>
 </html>
