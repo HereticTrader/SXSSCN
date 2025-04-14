@@ -73,15 +73,15 @@
 
   <div style="display: flex; justify-content: center; gap: 2rem; margin-bottom: 2rem;">
     <div style="text-align: center;">
-      <canvas id="chart1"></canvas>
+      <canvas id="chart1" width="450" height="420"></canvas>
       <div id="signal1" style="margin-top: 0.5rem; font-weight: bold;">...</div>
     </div>
     <div style="text-align: center;">
-      <canvas id="chart2"></canvas>
+      <canvas id="chart2" width="450" height="420"></canvas>
       <div id="signal2" style="margin-top: 0.5rem; font-weight: bold;">...</div>
     </div>
     <div style="text-align: center;">
-      <canvas id="chart3"></canvas>
+      <canvas id="chart3" width="450" height="420"></canvas>
       <div id="signal3" style="margin-top: 0.5rem; font-weight: bold;">...</div>
     </div>
   </div>
@@ -92,11 +92,40 @@
       const h = parseInt(document.getElementById("chartHeight").value);
       for (let i = 1; i <= 3; i++) {
         const canvas = document.getElementById(`chart${i}`);
-        canvas.setAttribute("width", w);
-        canvas.setAttribute("height", h);
+        canvas.width = w;
+        canvas.height = h;
       }
-      applySettings();
     }
+
+    function applySettings() {
+      resizeCharts();
+      const symbol = document.getElementById("symbol").value.toUpperCase();
+      document.getElementById("chartLabel").textContent = `Loading ${symbol} 1m Chart...`;
+      render(symbol);
+    }
+
+    function render(symbol) {
+      const ctx1 = document.getElementById("chart1").getContext("2d");
+      const ctx2 = document.getElementById("chart2").getContext("2d");
+      const ctx3 = document.getElementById("chart3").getContext("2d");
+      ctx1.clearRect(0, 0, ctx1.canvas.width, ctx1.canvas.height);
+      ctx2.clearRect(0, 0, ctx2.canvas.width, ctx2.canvas.height);
+      ctx3.clearRect(0, 0, ctx3.canvas.width, ctx3.canvas.height);
+      ctx1.fillStyle = 'white';
+      ctx1.fillText(symbol + " - 1m", 10, 20);
+      ctx2.fillStyle = 'white';
+      ctx2.fillText(symbol + " - 5m", 10, 20);
+      ctx3.fillStyle = 'white';
+      ctx3.fillText(symbol + " - 15m", 10, 20);
+    }
+
+    document.getElementById("emaThickness").addEventListener("input", () => {
+      document.getElementById("thicknessLabel").textContent = document.getElementById("emaThickness").value;
+    });
+
+    window.onload = () => {
+      applySettings();
+    };
   </script>
 </body>
 </html>
