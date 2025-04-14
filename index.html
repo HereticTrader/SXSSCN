@@ -216,7 +216,9 @@
       const lastPrice = data.at(-1).close;
       ctx.fillStyle = "yellow";
       ctx.font = "bold 12px monospace";
-      ctx.fillText(lastPrice.toFixed(4), canvas.width - padding - 60, y(lastPrice));
+      ctx.textAlign = "right";
+      ctx.fillText(lastPrice.toFixed(4), canvas.width - 10, y(lastPrice));
+
       ctx.fillStyle = "#888";
       ctx.fillText("H: " + max.toFixed(4), 10, 20);
       ctx.fillText("L: " + min.toFixed(4), 10, canvas.height - 10);
