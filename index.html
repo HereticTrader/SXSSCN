@@ -104,20 +104,85 @@
       render(symbol);
     }
 
-    function render(symbol) {
-      const ctx1 = document.getElementById("chart1").getContext("2d");
-      const ctx2 = document.getElementById("chart2").getContext("2d");
-      const ctx3 = document.getElementById("chart3").getContext("2d");
-      ctx1.clearRect(0, 0, ctx1.canvas.width, ctx1.canvas.height);
-      ctx2.clearRect(0, 0, ctx2.canvas.width, ctx2.canvas.height);
-      ctx3.clearRect(0, 0, ctx3.canvas.width, ctx3.canvas.height);
-      ctx1.fillStyle = 'white';
-      ctx1.fillText(symbol + " - 1m", 10, 20);
-      ctx2.fillStyle = 'white';
-      ctx2.fillText(symbol + " - 5m", 10, 20);
-      ctx3.fillStyle = 'white';
-      ctx3.fillText(symbol + " - 15m", 10, 20);
-    }
+    async function render(symbol = "ALCHUSDT") {
+  const intervals = ["1m", "5m", "15m"];
+  for (let i = 0; i < intervals.length; i++) {
+    const data = await fetchKlines(symbol, intervals[i]);
+    const ema8 = calculateEMA(data, 8);
+    const ema13 = calculateEMA(data, 13);
+    drawChart(`chart${i + 1}`, `signal${i + 1}`, data, ema8, ema13);
+  }
+}
+
+function drawChart(canvasId, signalId, data, ema8, ema13) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext("2d");
+  const padding = 40;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const w = canvas.width - 2 * padding;
+  const h = canvas.height - 2 * padding;
+  const candleWidth = w / data.length;
+  const highs = data.map(d => d.high);
+  const lows = data.map(d => d.low);
+  const max = Math.max(...highs);
+  const min = Math.min(...lows);
+  const y = p => padding + h - ((p - min) / (max - min)) * h;
+
+  const ema2 = calculateEMA(data, 2);
+  let condition = "EMA NONE";
+  if (ema2.at(-1) > ema8.at(-1) && ema8.at(-1) > ema13.at(-1)) {
+    condition = "EMA LONG ▲";
+    document.getElementById(signalId).style.color = "#00ff00";
+  } else if (ema2.at(-1) < ema8.at(-1) && ema8.at(-1) < ema13.at(-1)) {
+    condition = "EMA SHORT 🔻";
+    document.getElementById(signalId).style.color = "#ff00ff";
+  } else {
+    document.getElementById(signalId).style.color = "gray";
+  }
+  document.getElementById(signalId).textContent = condition;
+
+  data.forEach((d, i) => {
+    const x = padding + i * candleWidth;
+    const color = ema2[i] > ema8[i] && ema8[i] > ema13[i] ? "#00ff00" :
+                  ema2[i] < ema8[i] && ema8[i] < ema13[i] ? "#ff00ff" : "gray";
+    ctx.strokeStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x + candleWidth / 2, y(d.high));
+    ctx.lineTo(x + candleWidth / 2, y(d.low));
+    ctx.stroke();
+
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y(Math.max(d.open, d.close)), candleWidth - 1, Math.abs(y(d.open) - y(d.close)) || 1);
+  });
+
+  function drawLine(ema, color) {
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = parseFloat(document.getElementById("emaThickness").value);
+    ema.forEach((val, i) => {
+      const x = padding + i * candleWidth + candleWidth / 2;
+      const yPos = y(val);
+      if (i === 0) ctx.moveTo(x, yPos);
+      else ctx.lineTo(x, yPos);
+    });
+    ctx.stroke();
+    ctx.lineWidth = 1;
+  }
+
+  drawLine(ema8, "#00ffff");
+  drawLine(ema13, "#ff00ff");
+
+  const lastPrice = data.at(-1).close;
+  ctx.fillStyle = "yellow";
+  ctx.font = "bold 12px monospace";
+  ctx.textAlign = "right";
+  ctx.fillText(lastPrice.toFixed(4), canvas.width - 10, y(lastPrice));
+  ctx.fillStyle = "#888";
+  ctx.fillText("H: " + max.toFixed(4), canvas.width - 10, 20);
+  ctx.fillText("L: " + min.toFixed(4), canvas.width - 10, canvas.height - 10);
+  ctx.textAlign = "left";
+}
 
     document.getElementById("emaThickness").addEventListener("input", () => {
       document.getElementById("thicknessLabel").textContent = document.getElementById("emaThickness").value;
