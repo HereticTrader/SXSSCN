@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>ALCHUSDT AI SNIFFER</title>
+  <title>ALCHUSDT Sniffer v3.0</title>
   <style>
     body {
       background: black;
@@ -10,66 +10,23 @@
       font-family: monospace;
       padding: 20px;
     }
+    h1 { color: #0ff; }
+    .velocity { font-size: 1.8em; margin-top: 10px; }
+    .highlight { color: #ff0; }
+    canvas { border: 1px solid #0f0; background: #111; margin-top: 20px; }
 
-    h1 {
-      color: #0ff;
-    }
+    #velocityBarContainer { width: 100%; background: #111; height: 20px; margin-top: 10px; border: 1px solid #0f0; }
+    #velocityBar { height: 100%; width: 0%; background: linear-gradient(to right, #0f0, #ff0, #f00); transition: width 0.1s ease-in-out; }
 
-    .velocity {
-      font-size: 1.8em;
-      margin-top: 10px;
-    }
+    #sizeBars { display: flex; margin-top: 15px; height: 20px; }
+    #bidBar { background: green; height: 100%; }
+    #askBar { background: red; height: 100%; }
 
-    .highlight {
-      color: #ff0;
-    }
-
-    #velocityBarContainer {
-      width: 100%;
-      background-color: #111;
-      height: 20px;
-      margin-top: 10px;
-      border: 1px solid #0f0;
-    }
-
-    #velocityBar {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(to right, #0f0, #ff0, #f00);
-      transition: width 0.1s ease-in-out;
-    }
-
-    #sizeBars {
-      display: flex;
-      margin-top: 15px;
-      height: 20px;
-    }
-
-    #bidBar {
-      background: green;
-      height: 100%;
-    }
-
-    #askBar {
-      background: red;
-      height: 100%;
-    }
-
-    canvas {
-      border: 1px solid #0f0;
-      margin-top: 20px;
-      background: #111;
-    }
-
-    .section-title {
-      margin-top: 20px;
-      color: #0ff;
-      font-weight: bold;
-    }
+    .section-title { margin-top: 20px; color: #0ff; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h1>ALCH/USDT BookTicker AI Sniffer</h1>
+  <h1>ALCH/USDT AI Sniffer v3.0</h1>
 
   <div>Top Bid: <span id="topBid">...</span></div>
   <div>Top Ask: <span id="topAsk">...</span></div>
@@ -78,22 +35,17 @@
 
   <div class="velocity">Velocity: <span id="velocity">0.00000000</span></div>
 
-  <div id="velocityBarContainer">
-    <div id="velocityBar"></div>
-  </div>
+  <div id="velocityBarContainer"><div id="velocityBar"></div></div>
 
   <div id="sizeBars">
     <div id="bidBar" style="width: 50%"></div>
     <div id="askBar" style="width: 50%"></div>
   </div>
 
-  <div class="section-title">Velocity UP (Green Spikes)</div>
-  <canvas id="velUpCanvas" width="800" height="50"></canvas>
+  <div class="section-title">Delta Power (Buy vs Sell)</div>
+  <canvas id="deltaCanvas" width="800" height="50"></canvas>
 
-  <div class="section-title">Velocity DOWN (Red Spikes)</div>
-  <canvas id="velDownCanvas" width="800" height="50"></canvas>
-
-  <div class="section-title">Order Imbalance Line</div>
+  <div class="section-title">Imbalance Line (Buy=Green, Sell=Red) + Smooth Flowline</div>
   <canvas id="imbalanceCanvas" width="800" height="80"></canvas>
 
   <script>
@@ -106,21 +58,15 @@
     const bidBar = document.getElementById("bidBar");
     const askBar = document.getElementById("askBar");
 
-    const upCanvas = document.getElementById("velUpCanvas");
-    const downCanvas = document.getElementById("velDownCanvas");
+    const deltaCanvas = document.getElementById("deltaCanvas");
     const imbalanceCanvas = document.getElementById("imbalanceCanvas");
 
-    const ctxUp = upCanvas.getContext("2d");
-    const ctxDown = downCanvas.getContext("2d");
+    const ctxDelta = deltaCanvas.getContext("2d");
     const ctxImbalance = imbalanceCanvas.getContext("2d");
 
-    let lastBid = null;
-    let lastAsk = null;
-    let lastTime = Date.now();
-
-    let velUpHistory = new Array(800).fill(0);
-    let velDownHistory = new Array(800).fill(0);
+    let lastBid = null, lastAsk = null, lastTime = Date.now();
     let imbalanceHistory = new Array(800).fill(0);
+    let flowlineHistory = new Array(800).fill(0);
 
     const socket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@bookTicker");
 
@@ -135,37 +81,11 @@
       const timeDiff = (now - lastTime) / 1000;
 
       if (lastBid !== null && lastAsk !== null && timeDiff > 0) {
-        const deltaBid = bid - lastBid;
-        const deltaAsk = ask - lastAsk;
-        const velocity = ((Math.abs(deltaBid) + Math.abs(deltaAsk)) / timeDiff).toFixed(8);
+        const velocity = ((Math.abs(bid - lastBid) + Math.abs(ask - lastAsk)) / timeDiff).toFixed(8);
         velocityEl.textContent = velocity;
-
         const v = parseFloat(velocity);
-        const scaled = Math.min(v * 1000000, 100);
-        velocityBar.style.width = scaled + "%";
-
+        velocityBar.style.width = Math.min(v * 1000000, 100) + "%";
         velocityEl.className = v > 0.0001 ? "velocity highlight" : "velocity";
-
-        // Split up/down velocity
-        const avgDelta = (deltaBid + deltaAsk) / 2;
-        if (avgDelta >= 0) {
-          velUpHistory.push(v);
-          velDownHistory.push(0);
-        } else {
-          velUpHistory.push(0);
-          velDownHistory.push(v);
-        }
-        if (velUpHistory.length > 800) velUpHistory.shift();
-        if (velDownHistory.length > 800) velDownHistory.shift();
-
-        drawSpikeCanvas(ctxUp, velUpHistory, "#0f0");
-        drawSpikeCanvas(ctxDown, velDownHistory, "#f00");
-
-        // Imbalance % = (bid - ask) / (bid + ask)
-        const imbalance = (bidQty - askQty) / (bidQty + askQty + 0.00001);
-        imbalanceHistory.push(imbalance);
-        if (imbalanceHistory.length > 800) imbalanceHistory.shift();
-        drawImbalanceLine(ctxImbalance, imbalanceHistory);
       }
 
       lastBid = bid;
@@ -181,36 +101,71 @@
       const bidRatio = (bidQty / total) * 100;
       bidBar.style.width = bidRatio + "%";
       askBar.style.width = (100 - bidRatio) + "%";
+
+      // 📈 Delta = Buy - Sell
+      drawDelta(ctxDelta, bidQty - askQty);
+
+      // 📉 Imbalance % = (bid - ask) / (bid + ask)
+      const imbalance = (bidQty - askQty) / (bidQty + askQty + 0.00001);
+      imbalanceHistory.push(imbalance);
+      if (imbalanceHistory.length > 800) imbalanceHistory.shift();
+
+      // 🧮 Smoothing
+      const smooth = movingAverage(imbalanceHistory, 20);
+      flowlineHistory.push(smooth);
+      if (flowlineHistory.length > 800) flowlineHistory.shift();
+
+      drawImbalance(ctxImbalance, imbalanceHistory, flowlineHistory);
     };
 
-    function drawSpikeCanvas(ctx, data, color) {
+    function drawDelta(ctx, delta) {
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-      for (let i = 0; i < data.length; i++) {
-        const h = data[i] * 1000000;
-        ctx.fillStyle = color;
-        ctx.fillRect(i, ctx.canvas.height - h, 1, h);
-      }
+      const barHeight = Math.min(Math.abs(delta) * 2, ctx.canvas.height);
+      ctx.fillStyle = delta >= 0 ? "lime" : "red";
+      const y = delta >= 0 ? ctx.canvas.height - barHeight : 0;
+      ctx.fillRect(399, y, 2, barHeight);
     }
 
-    function drawImbalanceLine(ctx, data) {
+    function drawImbalance(ctx, raw, smooth) {
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       const mid = ctx.canvas.height / 2;
+
+      // RAW line
       ctx.beginPath();
-      for (let i = 0; i < data.length; i++) {
-        const y = mid - data[i] * mid;
+      for (let i = 0; i < raw.length; i++) {
+        const y = mid - raw[i] * mid;
         if (i === 0) ctx.moveTo(i, y);
         else ctx.lineTo(i, y);
       }
-      ctx.strokeStyle = "#0ff";
+      ctx.strokeStyle = raw[raw.length - 1] >= 0 ? "lime" : "red";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // SMOOTH line
+      ctx.beginPath();
+      for (let i = 0; i < smooth.length; i++) {
+        const y = mid - smooth[i] * mid;
+        if (i === 0) ctx.moveTo(i, y);
+        else ctx.lineTo(i, y);
+      }
+      ctx.strokeStyle = "#00ffff";
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      // Draw center line
+      // Center line
       ctx.strokeStyle = "#333";
       ctx.beginPath();
       ctx.moveTo(0, mid);
       ctx.lineTo(ctx.canvas.width, mid);
       ctx.stroke();
+    }
+
+    function movingAverage(arr, period) {
+      const len = arr.length;
+      if (len < period) return 0;
+      const subset = arr.slice(len - period);
+      const sum = subset.reduce((a, b) => a + b, 0);
+      return sum / period;
     }
   </script>
 </body>
