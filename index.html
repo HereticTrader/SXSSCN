@@ -1,21 +1,58 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>ALCHUSDT Velocity Sniffer</title>
   <style>
-    body { background: #000; color: #0f0; font-family: monospace; padding: 20px; }
-    h1 { color: #0ff; }
-    .velocity { font-size: 1.8em; margin-top: 10px; }
-    .highlight { color: #ff0; }
+    body {
+      background: black;
+      color: #0f0;
+      font-family: monospace;
+      padding: 20px;
+    }
+
+    h1 {
+      color: #0ff;
+    }
+
+    .velocity {
+      font-size: 1.8em;
+      margin-top: 10px;
+    }
+
+    .highlight {
+      color: #ff0;
+    }
+
+    #velocityBarContainer {
+      width: 100%;
+      background-color: #111;
+      height: 20px;
+      margin-top: 10px;
+      border: 1px solid #0f0;
+    }
+
+    #velocityBar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(to right, #0f0, #ff0, #f00);
+      transition: width 0.1s ease-in-out;
+    }
   </style>
 </head>
 <body>
   <h1>ALCH/USDT BookTicker Sniffer</h1>
+
   <div>Top Bid: <span id="topBid">...</span></div>
   <div>Top Ask: <span id="topAsk">...</span></div>
   <div>Bid Size: <span id="bidQty">...</span></div>
   <div>Ask Size: <span id="askQty">...</span></div>
-  <div class="velocity">Velocity: <span id="velocity">0</span></div>
+
+  <div class="velocity">Velocity: <span id="velocity">0.00000000</span></div>
+
+  <div id="velocityBarContainer">
+    <div id="velocityBar"></div>
+  </div>
 
   <script>
     const bidEl = document.getElementById("topBid");
@@ -23,8 +60,11 @@
     const bidQtyEl = document.getElementById("bidQty");
     const askQtyEl = document.getElementById("askQty");
     const velocityEl = document.getElementById("velocity");
+    const velocityBar = document.getElementById("velocityBar");
 
-    let lastBid = null, lastAsk = null, lastTime = Date.now();
+    let lastBid = null;
+    let lastAsk = null;
+    let lastTime = Date.now();
 
     const socket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@bookTicker");
 
@@ -42,17 +82,28 @@
       if (lastBid !== null && lastAsk !== null && timeDiff > 0) {
         const velocity = ((Math.abs(bid - lastBid) + Math.abs(ask - lastAsk)) / timeDiff).toFixed(8);
         velocityEl.textContent = velocity;
-        velocityEl.className = parseFloat(velocity) > 0.0001 ? "velocity highlight" : "velocity";
-      }
 
-      bidEl.textContent = bid;
-      askEl.textContent = ask;
-      bidQtyEl.textContent = bidQty.toFixed(2);
-      askQtyEl.textContent = askQty.toFixed(2);
+        // Scale velocity to 0–100 for bar width
+        const v = parseFloat(velocity);
+        const scaled = Math.min(v * 1000000, 100); // Adjust scaling if needed
+        velocityBar.style.width = scaled + "%";
+
+        // Change color if high
+        velocityEl.className = v > 0.0001 ? "velocity highlight" : "velocity";
+      }
 
       lastBid = bid;
       lastAsk = ask;
       lastTime = now;
+
+      bidEl.textContent = bid.toFixed(5);
+      askEl.textContent = ask.toFixed(5);
+      bidQtyEl.textContent = bidQty.toFixed(2);
+      askQtyEl.textContent = askQty.toFixed(2);
+    };
+
+    socket.onerror = (err) => {
+      console.error("WebSocket error:", err);
     };
   </script>
 </body>
