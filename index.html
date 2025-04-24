@@ -1,16 +1,29 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Futures Order Book Velocity</title>
+  <meta charset="UTF-8">
+  <title>ALCHUSDT Velocity Sniffer</title>
   <style>
-    body { background: #000; color: #0f0; font-family: monospace; padding: 20px; }
-    h1 { color: #0ff; }
-    .velocity { font-size: 1.8em; margin-top: 10px; }
-    .highlight { color: #ff0; }
+    body {
+      background: black;
+      color: #0f0;
+      font-family: monospace;
+      padding: 20px;
+    }
+    h1 {
+      color: #0ff;
+    }
+    .velocity {
+      font-size: 1.8em;
+      margin-top: 10px;
+    }
+    .highlight {
+      color: #ff0;
+    }
   </style>
 </head>
 <body>
-  <h1>BTC/USDT Futures Velocity Sniffer</h1>
+  <h1>ALCH/USDT Futures Velocity Sniffer</h1>
   <div>Top Bid: <span id="topBid">...</span></div>
   <div>Top Ask: <span id="topAsk">...</span></div>
   <div>Bid Size: <span id="bidQty">...</span></div>
@@ -26,13 +39,21 @@
     const velocityEl = document.getElementById("velocity");
     const pressureEl = document.getElementById("pressure");
 
-    let lastBid = null, lastAsk = null, lastTime = Date.now();
+    let lastBid = null;
+    let lastAsk = null;
+    let lastTime = Date.now();
 
-    const socket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@depth");
-
+    // ✅ Using depth5@100ms for better responsiveness
+    const socket = new WebSocket("wss://fstream.binance.com/stream?streams=alchusdt@depth5@100ms");
 
     socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+      const parsed = JSON.parse(event.data);
+      const data = parsed.data;
+
+      if (!data || !data.bids || !data.asks || data.bids.length === 0 || data.asks.length === 0) {
+        return;
+      }
+
       const bid = parseFloat(data.bids[0][0]);
       const ask = parseFloat(data.asks[0][0]);
       const bidQty = parseFloat(data.bids[0][1]);
@@ -44,14 +65,13 @@
       if (lastBid !== null && lastAsk !== null && timeDiff > 0) {
         const bidMove = Math.abs(bid - lastBid);
         const askMove = Math.abs(ask - lastAsk);
-        const velocity = ((bidMove + askMove) / timeDiff).toFixed(5);
+        const velocity = ((bidMove + askMove) / timeDiff).toFixed(8); // very small changes
         const pressure = ((bidQty / (askQty + 0.00001)) * 100).toFixed(1);
 
         velocityEl.textContent = velocity;
         pressureEl.textContent = pressure + " %";
 
-        // Visual alert
-        velocityEl.className = velocity > 5 ? "velocity highlight" : "velocity";
+        velocityEl.className = parseFloat(velocity) > 0.0001 ? "velocity highlight" : "velocity";
       }
 
       lastBid = bid;
@@ -62,6 +82,10 @@
       askEl.textContent = ask;
       bidQtyEl.textContent = bidQty.toFixed(2);
       askQtyEl.textContent = askQty.toFixed(2);
+    };
+
+    socket.onerror = (err) => {
+      console.error("WebSocket error:", err);
     };
   </script>
 </body>
