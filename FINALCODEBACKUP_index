@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SXSSCN GOD MODE Radar</title>
+  <style>
+    body { background: #000; color: white; font-family: monospace; padding: 2rem; }
+    h1 { text-align: center; color: #00ffff; }
+    input, button { font-size: 1rem; padding: 0.3rem 0.6rem; margin-top: 0.5rem; }
+    #tableWidth { width: 60px; }
+
+    table { width: var(--table-width, 600px); margin-top: 1rem; border-collapse: collapse; font-size: 0.85rem; margin-left: auto; margin-right: auto; }
+    th, td { padding: 0.4rem; text-align: center; border: 1px solid #444; }
+    th { background: #111; color: yellow; }
+
+    .ema-none    { background-color: #111122; color: gray; font-weight: bold; }
+    .ema-long    { background-color: #001111; color: #00ffff; font-weight: bold; }
+    .ema-long-2  { background-color: #002222; color: #00ffff; font-weight: bold; }
+    .ema-long-3  { background-color: #004444; color: #00ffff; font-weight: bold; }
+    .ema-short   { background-color: #110011; color: #ff00ff; font-weight: bold; }
+    .ema-short-2 { background-color: #220022; color: #ff00ff; font-weight: bold; }
+    .ema-short-3 { background-color: #440044; color: #ff00ff; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>SXSSCN - SUPER STRONG EMA SCANNER</h1>
+  <label for="symbols">Paste Symbols (comma separated):</label><br>
+  <input type="text" id="symbols" style="width: 100%;" value="BTCUSDT,ALCHUSDT,ARCUSDT,FUNUSDT,TSTUSDT,TRUMPUSDT,XRPUSDT" />
+  <br>
+  <label for="tableWidth">Table Width:</label>
+  <input type="number" id="tableWidth" value="600" oninput="document.documentElement.style.setProperty('--table-width', this.value + 'px')">
+  <button onclick="scan()">🔍 Scan Now</button>
+
+  <table>
+    <thead>
+      <tr><th>Symbol</th><th>Status</th><th>Last Price</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <h1>📊 SOIXIOS Custom Chart <span style='font-size: 0.8rem; color: #888;'>v1.9</span></h1>
+  <div style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+    <label for="symbol">Symbol:</label>
+    <input type="text" id="symbol" value="ALCHUSDT" style="width: 120px; text-align: center; font-weight: bold;">
+    <button onclick="applySettings()">Load</button>
+  </div>
+
+  <h2 id="chartLabel" style="text-align: center; color: yellow; margin-top: 1rem;">Loading BTCUSDT 1m Chart...</h2>
+
+  <div style="text-align:center; margin-bottom: 1rem;">
+    <label for="emaThickness">EMA Line Width:</label>
+    <input type="range" id="emaThickness" min="1" max="5" value="2">
+    <span id="thicknessLabel">2</span> px
+  </div>
+
+  <div style="text-align:center; margin-bottom: 1rem;">
+    <label for="chartWidth">Chart Width:</label>
+    <input type="number" id="chartWidth" value="450" style="width: 80px;">
+    &nbsp;
+    <label for="chartHeight">Chart Height:</label>
+    <input type="number" id="chartHeight" value="420" style="width: 80px;">
+    <button onclick="resizeCharts()">Apply Size</button>
+  </div>
+
+  <div style="display: flex; justify-content: center; gap: 2rem; margin-bottom: 0.5rem;">
+    <div style="width: 400px; text-align: center; font-size: 0.9rem; color: yellow;">1 Minute</div>
+    <div style="width: 400px; text-align: center; font-size: 0.9rem; color: yellow;">5 Minutes</div>
+    <div style="width: 400px; text-align: center; font-size: 0.9rem; color: yellow;">15 Minutes</div>
+  </div>
+
+  <div style="display: flex; justify-content: center; gap: 2rem; margin-bottom: 2rem;">
+    <div style="text-align: center;">
+      <canvas id="chart1"></canvas>
+      <div id="signal1" style="margin-top: 0.5rem; font-weight: bold;">...</div>
+    </div>
+    <div style="text-align: center;">
+      <canvas id="chart2"></canvas>
+      <div id="signal2" style="margin-top: 0.5rem; font-weight: bold;">...</div>
+    </div>
+    <div style="text-align: center;">
+      <canvas id="chart3"></canvas>
+      <div id="signal3" style="margin-top: 0.5rem; font-weight: bold;">...</div>
+    </div>
+  </div>
+
+  <script>
+    const EMA = (data, len) => {
+      const k = 2 / (len + 1);
+      let ema = data[0];
+      return data.map((v, i) => i === 0 ? ema : ema = v * k + ema * (1 - k));
+    };
+
+    async function fetch1m(symbol) {
+      try {
+        const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=250`);
+        const raw = await res.json();
+        return raw.map(c => parseFloat(c[4]));
+      } catch { return []; }
+    }
+
+    async function scan() {
+      const list = document.getElementById("symbols").value.split(",").map(s => s.trim().toUpperCase());
+      const tbody = document.getElementById("results");
+      const newRows = [];
+
+      for (let symbol of list) {
+        const data = await fetch1m(symbol);
+        if (data.length < 233) continue;
+
+        const close = data.at(-1);
+        const ema2 = EMA(data, 2).at(-1);
+        const ema8 = EMA(data, 8).at(-1);
+        const ema13 = EMA(data, 13).at(-1);
+        const ema34 = EMA(data, 34).at(-1);
+        const ema55 = EMA(data, 55).at(-1);
+        const ema144 = EMA(data, 144).at(-1);
+        const ema233 = EMA(data, 233).at(-1);
+
+        let signal = "EMA NONE", css = "ema-none";
+        if (close > ema2 && ema2 > ema8 && ema8 > ema13 && ema13 > ema34 && ema34 > ema55 && ema55 > ema144 && ema144 > ema233) {
+          signal = 'EMA LONG *** <span style="color:#00ff00">▲</span>'; css = "ema-long-3";
+        } else if (close > ema2 && ema2 > ema8 && ema8 > ema13 && ema13 > ema34 && ema34 > ema55) {
+          signal = 'EMA LONG **'; css = "ema-long-2";
+        } else if (ema2 > ema8 && ema8 > ema13) {
+          signal = 'EMA LONG'; css = "ema-long";
+        } else if (close < ema2 && ema2 < ema8 && ema8 < ema13 && ema13 < ema34 && ema34 < ema55 && ema55 < ema144 && ema144 < ema233) {
+          signal = 'EMA SHORT *** 🔻'; css = "ema-short-3";
+        } else if (close < ema2 && ema2 < ema8 && ema8 < ema13 && ema13 < ema34 && ema34 < ema55) {
+          signal = 'EMA SHORT **'; css = "ema-short-2";
+        } else if (ema2 < ema8 && ema8 < ema13) {
+          signal = 'EMA SHORT'; css = "ema-short";
+        }
+
+        newRows.push(`<tr class="${css}"><td>${symbol}</td><td>${signal}</td><td>${close.toFixed(6)}</td></tr>`);
+      }
+
+      tbody.innerHTML = newRows.join("");
+    }
+
+    async function fetchKlines(symbol, interval, limit = 100) {
+      const urls = [
+        `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`,
+        `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`
+      ];
+      for (let url of urls) {
+        try {
+          const res = await fetch(url);
+          const raw = await res.json();
+          if (Array.isArray(raw)) {
+            return raw.map(c => ({ time: c[0], open: +c[1], high: +c[2], low: +c[3], close: +c[4] }));
+          }
+        } catch {}
+      }
+      return [];
+    }
+
+    function calculateEMA(data, length) {
+      const k = 2 / (length + 1);
+      let ema = data[0].close;
+      return data.map((d, i) => i === 0 ? ema : ema = d.close * k + ema * (1 - k));
+    }
+
+    function drawChart(canvasId, signalId, data, ema8, ema13) {
+      const canvas = document.getElementById(canvasId);
+      const ctx = canvas.getContext("2d");
+      const padding = 40;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const w = canvas.width - 2 * padding;
+      const h = canvas.height - 2 * padding;
+      const candleWidth = w / data.length;
+      const highs = data.map(d => d.high);
+      const lows = data.map(d => d.low);
+      const max = Math.max(...highs);
+      const min = Math.min(...lows);
+      const y = p => padding + h - ((p - min) / (max - min)) * h;
+
+      const ema2 = calculateEMA(data, 2);
+      let condition = "EMA NONE";
+      if (ema2.at(-1) > ema8.at(-1) && ema8.at(-1) > ema13.at(-1)) {
+        condition = "EMA LONG ▲"; document.getElementById(signalId).style.color = "#00ff00";
+      } else if (ema2.at(-1) < ema8.at(-1) && ema8.at(-1) < ema13.at(-1)) {
+        condition = "EMA SHORT 🔻"; document.getElementById(signalId).style.color = "#ff00ff";
+      } else {
+        document.getElementById(signalId).style.color = "gray";
+      }
+      document.getElementById(signalId).textContent = condition;
+
+      data.forEach((d, i) => {
+        const x = padding + i * candleWidth;
+        const color = ema2[i] > ema8[i] && ema8[i] > ema13[i] ? "#00ff00" : ema2[i] < ema8[i] && ema8[i] < ema13[i] ? "#ff00ff" : "gray";
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x + candleWidth / 2, y(d.high));
+        ctx.lineTo(x + candleWidth / 2, y(d.low));
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y(Math.max(d.open, d.close)), candleWidth - 1, Math.abs(y(d.open) - y(d.close)) || 1);
+      });
+
+      function drawLine(ema, color) {
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = parseFloat(document.getElementById("emaThickness").value);
+        ema.forEach((val, i) => {
+          const x = padding + i * candleWidth + candleWidth / 2;
+          const yPos = y(val);
+          i === 0 ? ctx.moveTo(x, yPos) : ctx.lineTo(x, yPos);
+        });
+        ctx.stroke();
+        ctx.lineWidth = 1;
+      }
+      drawLine(ema8, "#00ffff");
+      drawLine(ema13, "#ff00ff");
+      const lastPrice = data.at(-1).close;
+      ctx.fillStyle = "yellow";
+      ctx.font = "bold 12px monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(lastPrice.toFixed(4), canvas.width - 10, y(lastPrice));
+
+      ctx.fillStyle = "#888";
+      ctx.fillText("H: " + max.toFixed(4), 10, 20);
+      ctx.fillText("L: " + min.toFixed(4), 10, canvas.height - 10);
+    }
+
+    async function render(symbol = "ALCHUSDT") {
+      const intervals = ["1m", "5m", "15m"];
+      for (let i = 0; i < intervals.length; i++) {
+        const data = await fetchKlines(symbol, intervals[i]);
+        const ema8 = calculateEMA(data, 8);
+        const ema13 = calculateEMA(data, 13);
+        drawChart(`chart${i + 1}`, `signal${i + 1}`, data, ema8, ema13);
+      }
+    }
+
+    function applySettings() {
+      const symbol = document.getElementById("symbol").value.toUpperCase();
+      document.getElementById("chartLabel").textContent = `Loading ${symbol} 1m Chart...`;
+      render(symbol);
+    }
+
+    function resizeCharts() {
+      const w = parseInt(document.getElementById("chartWidth").value);
+      const h = parseInt(document.getElementById("chartHeight").value);
+      for (let i = 1; i <= 3; i++) {
+        const canvas = document.getElementById(`chart${i}`);
+        canvas.width = w;
+        canvas.height = h;
+      }
+      applySettings();
+    }
+
+    document.getElementById("emaThickness").addEventListener("input", () => {
+      document.getElementById("thicknessLabel").textContent = document.getElementById("emaThickness").value;
+    });
+
+    window.onload = () => {
+      resizeCharts();
+      scan();
+      setInterval(scan, 5000);
+      setInterval(() => applySettings(), 5000);
+    };
+  </script>
+</body>
+</html>
