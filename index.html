@@ -38,6 +38,28 @@
       background: linear-gradient(to right, #0f0, #ff0, #f00);
       transition: width 0.1s ease-in-out;
     }
+
+    #sizeBars {
+      display: flex;
+      margin-top: 15px;
+      height: 20px;
+    }
+
+    #bidBar {
+      background: green;
+      height: 100%;
+    }
+
+    #askBar {
+      background: red;
+      height: 100%;
+    }
+
+    #graphCanvas {
+      margin-top: 30px;
+      border: 1px solid #0f0;
+      background: #111;
+    }
   </style>
 </head>
 <body>
@@ -54,6 +76,15 @@
     <div id="velocityBar"></div>
   </div>
 
+  <!-- Bid/Ask Size Bar -->
+  <div id="sizeBars">
+    <div id="bidBar" style="width: 50%"></div>
+    <div id="askBar" style="width: 50%"></div>
+  </div>
+
+  <!-- Velocity Line Graph -->
+  <canvas id="graphCanvas" width="800" height="100"></canvas>
+
   <script>
     const bidEl = document.getElementById("topBid");
     const askEl = document.getElementById("topAsk");
@@ -61,10 +92,17 @@
     const askQtyEl = document.getElementById("askQty");
     const velocityEl = document.getElementById("velocity");
     const velocityBar = document.getElementById("velocityBar");
+    const bidBar = document.getElementById("bidBar");
+    const askBar = document.getElementById("askBar");
+    const canvas = document.getElementById("graphCanvas");
+    const ctx = canvas.getContext("2d");
 
     let lastBid = null;
     let lastAsk = null;
     let lastTime = Date.now();
+    let lastClose = 0;
+
+    let velocityHistory = [];
 
     const socket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@bookTicker");
 
@@ -83,28 +121,58 @@
         const velocity = ((Math.abs(bid - lastBid) + Math.abs(ask - lastAsk)) / timeDiff).toFixed(8);
         velocityEl.textContent = velocity;
 
-        // Scale velocity to 0–100 for bar width
         const v = parseFloat(velocity);
-        const scaled = Math.min(v * 1000000, 100); // Adjust scaling if needed
+        const scaled = Math.min(v * 1000000, 100);
         velocityBar.style.width = scaled + "%";
 
-        // Change color if high
         velocityEl.className = v > 0.0001 ? "velocity highlight" : "velocity";
+
+        velocityHistory.push(v);
+        if (velocityHistory.length > 800) velocityHistory.shift();
+        drawVelocityGraph(velocityHistory, (bid + ask) / 2);
       }
 
       lastBid = bid;
       lastAsk = ask;
       lastTime = now;
+      lastClose = (bid + ask) / 2;
 
       bidEl.textContent = bid.toFixed(5);
       askEl.textContent = ask.toFixed(5);
       bidQtyEl.textContent = bidQty.toFixed(2);
       askQtyEl.textContent = askQty.toFixed(2);
+
+      // Size ratio bar
+      const total = bidQty + askQty + 0.00001;
+      const bidRatio = (bidQty / total) * 100;
+      bidBar.style.width = bidRatio + "%";
+      askBar.style.width = (100 - bidRatio) + "%";
     };
 
-    socket.onerror = (err) => {
-      console.error("WebSocket error:", err);
-    };
+    function drawVelocityGraph(history, closeLine) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const maxV = 0.0002;
+      ctx.strokeStyle = "#0f0";
+      ctx.beginPath();
+
+      for (let i = 0; i < history.length; i++) {
+        const v = Math.min(history[i], maxV);
+        const y = canvas.height - (v / maxV) * canvas.height;
+        if (i === 0) {
+          ctx.moveTo(i, y);
+        } else {
+          ctx.lineTo(i, y);
+        }
+      }
+      ctx.stroke();
+
+      // Draw close line
+      ctx.strokeStyle = "#555";
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height / 2);
+      ctx.lineTo(canvas.width, canvas.height / 2);
+      ctx.stroke();
+    }
   </script>
 </body>
 </html>
