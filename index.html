@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>ALCHUSDT Velocity Sniffer</title>
+  <title>ALCHUSDT AI SNIFFER</title>
   <style>
     body {
       background: black;
@@ -55,15 +55,21 @@
       height: 100%;
     }
 
-    #graphCanvas {
-      margin-top: 30px;
+    canvas {
       border: 1px solid #0f0;
+      margin-top: 20px;
       background: #111;
+    }
+
+    .section-title {
+      margin-top: 20px;
+      color: #0ff;
+      font-weight: bold;
     }
   </style>
 </head>
 <body>
-  <h1>ALCH/USDT BookTicker Sniffer</h1>
+  <h1>ALCH/USDT BookTicker AI Sniffer</h1>
 
   <div>Top Bid: <span id="topBid">...</span></div>
   <div>Top Ask: <span id="topAsk">...</span></div>
@@ -76,14 +82,19 @@
     <div id="velocityBar"></div>
   </div>
 
-  <!-- Bid/Ask Size Bar -->
   <div id="sizeBars">
     <div id="bidBar" style="width: 50%"></div>
     <div id="askBar" style="width: 50%"></div>
   </div>
 
-  <!-- Velocity Line Graph -->
-  <canvas id="graphCanvas" width="800" height="100"></canvas>
+  <div class="section-title">Velocity UP (Green Spikes)</div>
+  <canvas id="velUpCanvas" width="800" height="50"></canvas>
+
+  <div class="section-title">Velocity DOWN (Red Spikes)</div>
+  <canvas id="velDownCanvas" width="800" height="50"></canvas>
+
+  <div class="section-title">Order Imbalance Line</div>
+  <canvas id="imbalanceCanvas" width="800" height="80"></canvas>
 
   <script>
     const bidEl = document.getElementById("topBid");
@@ -94,21 +105,27 @@
     const velocityBar = document.getElementById("velocityBar");
     const bidBar = document.getElementById("bidBar");
     const askBar = document.getElementById("askBar");
-    const canvas = document.getElementById("graphCanvas");
-    const ctx = canvas.getContext("2d");
+
+    const upCanvas = document.getElementById("velUpCanvas");
+    const downCanvas = document.getElementById("velDownCanvas");
+    const imbalanceCanvas = document.getElementById("imbalanceCanvas");
+
+    const ctxUp = upCanvas.getContext("2d");
+    const ctxDown = downCanvas.getContext("2d");
+    const ctxImbalance = imbalanceCanvas.getContext("2d");
 
     let lastBid = null;
     let lastAsk = null;
     let lastTime = Date.now();
-    let lastClose = 0;
 
-    let velocityHistory = [];
+    let velUpHistory = new Array(800).fill(0);
+    let velDownHistory = new Array(800).fill(0);
+    let imbalanceHistory = new Array(800).fill(0);
 
     const socket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@bookTicker");
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
-
       const bid = parseFloat(data.b);
       const ask = parseFloat(data.a);
       const bidQty = parseFloat(data.B);
@@ -118,7 +135,9 @@
       const timeDiff = (now - lastTime) / 1000;
 
       if (lastBid !== null && lastAsk !== null && timeDiff > 0) {
-        const velocity = ((Math.abs(bid - lastBid) + Math.abs(ask - lastAsk)) / timeDiff).toFixed(8);
+        const deltaBid = bid - lastBid;
+        const deltaAsk = ask - lastAsk;
+        const velocity = ((Math.abs(deltaBid) + Math.abs(deltaAsk)) / timeDiff).toFixed(8);
         velocityEl.textContent = velocity;
 
         const v = parseFloat(velocity);
@@ -127,50 +146,70 @@
 
         velocityEl.className = v > 0.0001 ? "velocity highlight" : "velocity";
 
-        velocityHistory.push(v);
-        if (velocityHistory.length > 800) velocityHistory.shift();
-        drawVelocityGraph(velocityHistory, (bid + ask) / 2);
+        // Split up/down velocity
+        const avgDelta = (deltaBid + deltaAsk) / 2;
+        if (avgDelta >= 0) {
+          velUpHistory.push(v);
+          velDownHistory.push(0);
+        } else {
+          velUpHistory.push(0);
+          velDownHistory.push(v);
+        }
+        if (velUpHistory.length > 800) velUpHistory.shift();
+        if (velDownHistory.length > 800) velDownHistory.shift();
+
+        drawSpikeCanvas(ctxUp, velUpHistory, "#0f0");
+        drawSpikeCanvas(ctxDown, velDownHistory, "#f00");
+
+        // Imbalance % = (bid - ask) / (bid + ask)
+        const imbalance = (bidQty - askQty) / (bidQty + askQty + 0.00001);
+        imbalanceHistory.push(imbalance);
+        if (imbalanceHistory.length > 800) imbalanceHistory.shift();
+        drawImbalanceLine(ctxImbalance, imbalanceHistory);
       }
 
       lastBid = bid;
       lastAsk = ask;
       lastTime = now;
-      lastClose = (bid + ask) / 2;
 
       bidEl.textContent = bid.toFixed(5);
       askEl.textContent = ask.toFixed(5);
       bidQtyEl.textContent = bidQty.toFixed(2);
       askQtyEl.textContent = askQty.toFixed(2);
 
-      // Size ratio bar
       const total = bidQty + askQty + 0.00001;
       const bidRatio = (bidQty / total) * 100;
       bidBar.style.width = bidRatio + "%";
       askBar.style.width = (100 - bidRatio) + "%";
     };
 
-    function drawVelocityGraph(history, closeLine) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const maxV = 0.0002;
-      ctx.strokeStyle = "#0f0";
-      ctx.beginPath();
-
-      for (let i = 0; i < history.length; i++) {
-        const v = Math.min(history[i], maxV);
-        const y = canvas.height - (v / maxV) * canvas.height;
-        if (i === 0) {
-          ctx.moveTo(i, y);
-        } else {
-          ctx.lineTo(i, y);
-        }
+    function drawSpikeCanvas(ctx, data, color) {
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      for (let i = 0; i < data.length; i++) {
+        const h = data[i] * 1000000;
+        ctx.fillStyle = color;
+        ctx.fillRect(i, ctx.canvas.height - h, 1, h);
       }
+    }
+
+    function drawImbalanceLine(ctx, data) {
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      const mid = ctx.canvas.height / 2;
+      ctx.beginPath();
+      for (let i = 0; i < data.length; i++) {
+        const y = mid - data[i] * mid;
+        if (i === 0) ctx.moveTo(i, y);
+        else ctx.lineTo(i, y);
+      }
+      ctx.strokeStyle = "#0ff";
+      ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      // Draw close line
-      ctx.strokeStyle = "#555";
+      // Draw center line
+      ctx.strokeStyle = "#333";
       ctx.beginPath();
-      ctx.moveTo(0, canvas.height / 2);
-      ctx.lineTo(canvas.width, canvas.height / 2);
+      ctx.moveTo(0, mid);
+      ctx.lineTo(ctx.canvas.width, mid);
       ctx.stroke();
     }
   </script>
