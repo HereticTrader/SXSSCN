@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>ALCHUSDT Sniffer v3.0</title>
+  <meta charset="UTF-8" />
+  <title>ALCHUSDT AI Candle Sniffer v4.0</title>
   <style>
     body {
       background: black;
@@ -10,43 +10,39 @@
       font-family: monospace;
       padding: 20px;
     }
-    h1 { color: #0ff; }
-    .velocity { font-size: 1.8em; margin-top: 10px; }
-    .highlight { color: #ff0; }
-    canvas { border: 1px solid #0f0; background: #111; margin-top: 20px; }
-
-    #velocityBarContainer { width: 100%; background: #111; height: 20px; margin-top: 10px; border: 1px solid #0f0; }
-    #velocityBar { height: 100%; width: 0%; background: linear-gradient(to right, #0f0, #ff0, #f00); transition: width 0.1s ease-in-out; }
-
-    #sizeBars { display: flex; margin-top: 15px; height: 20px; }
-    #bidBar { background: green; height: 100%; }
-    #askBar { background: red; height: 100%; }
-
-    .section-title { margin-top: 20px; color: #0ff; font-weight: bold; }
+    h1 {
+      color: #0ff;
+    }
+    .velocity {
+      font-size: 1.8em;
+      margin-top: 10px;
+    }
+    .highlight {
+      color: #ff0;
+    }
+    canvas {
+      border: 1px solid #0f0;
+      background: #111;
+      margin-top: 20px;
+    }
+    .section-title {
+      margin-top: 20px;
+      color: #0ff;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
-  <h1>ALCH/USDT AI Sniffer v3.0</h1>
+  <h1>ALCH/USDT AI Candle Sniffer v4.0</h1>
 
   <div>Top Bid: <span id="topBid">...</span></div>
   <div>Top Ask: <span id="topAsk">...</span></div>
   <div>Bid Size: <span id="bidQty">...</span></div>
   <div>Ask Size: <span id="askQty">...</span></div>
-
   <div class="velocity">Velocity: <span id="velocity">0.00000000</span></div>
 
-  <div id="velocityBarContainer"><div id="velocityBar"></div></div>
-
-  <div id="sizeBars">
-    <div id="bidBar" style="width: 50%"></div>
-    <div id="askBar" style="width: 50%"></div>
-  </div>
-
-  <div class="section-title">Delta Power (Buy vs Sell)</div>
-  <canvas id="deltaCanvas" width="800" height="50"></canvas>
-
-  <div class="section-title">Imbalance Line (Buy=Green, Sell=Red) + Smooth Flowline</div>
-  <canvas id="imbalanceCanvas" width="800" height="80"></canvas>
+  <div class="section-title">🕯️ 30s Real-Time Candles + Madness Overlay</div>
+  <canvas id="candleCanvas" width="800" height="200"></canvas>
 
   <script>
     const bidEl = document.getElementById("topBid");
@@ -54,23 +50,36 @@
     const bidQtyEl = document.getElementById("bidQty");
     const askQtyEl = document.getElementById("askQty");
     const velocityEl = document.getElementById("velocity");
-    const velocityBar = document.getElementById("velocityBar");
-    const bidBar = document.getElementById("bidBar");
-    const askBar = document.getElementById("askBar");
 
-    const deltaCanvas = document.getElementById("deltaCanvas");
-    const imbalanceCanvas = document.getElementById("imbalanceCanvas");
-
-    const ctxDelta = deltaCanvas.getContext("2d");
-    const ctxImbalance = imbalanceCanvas.getContext("2d");
+    const candleCanvas = document.getElementById("candleCanvas");
+    const ctx = candleCanvas.getContext("2d");
 
     let lastBid = null, lastAsk = null, lastTime = Date.now();
-    let imbalanceHistory = new Array(800).fill(0);
-    let flowlineHistory = new Array(800).fill(0);
+    let velocity = 0;
+    let candles = [];
 
-    const socket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@bookTicker");
+    const maxCandles = 60; // Keep ~30 minutes of 30s candles
 
-    socket.onmessage = (event) => {
+    const klineSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@kline_30s");
+    const bookSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@bookTicker");
+
+    // Candle stream
+    klineSocket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      const k = data.k;
+      const open = parseFloat(k.o);
+      const high = parseFloat(k.h);
+      const low = parseFloat(k.l);
+      const close = parseFloat(k.c);
+
+      candles.push({ open, high, low, close, velocity });
+      if (candles.length > maxCandles) candles.shift();
+
+      drawCandles();
+    };
+
+    // Order book + velocity tracking
+    bookSocket.onmessage = (event) => {
       const data = JSON.parse(event.data);
       const bid = parseFloat(data.b);
       const ask = parseFloat(data.a);
@@ -79,15 +88,11 @@
 
       const now = Date.now();
       const timeDiff = (now - lastTime) / 1000;
-
       if (lastBid !== null && lastAsk !== null && timeDiff > 0) {
-        const velocity = ((Math.abs(bid - lastBid) + Math.abs(ask - lastAsk)) / timeDiff).toFixed(8);
+        velocity = ((Math.abs(bid - lastBid) + Math.abs(ask - lastAsk)) / timeDiff).toFixed(8);
         velocityEl.textContent = velocity;
-        const v = parseFloat(velocity);
-        velocityBar.style.width = Math.min(v * 1000000, 100) + "%";
-        velocityEl.className = v > 0.0001 ? "velocity highlight" : "velocity";
+        velocityEl.className = parseFloat(velocity) > 0.0001 ? "velocity highlight" : "velocity";
       }
-
       lastBid = bid;
       lastAsk = ask;
       lastTime = now;
@@ -96,76 +101,39 @@
       askEl.textContent = ask.toFixed(5);
       bidQtyEl.textContent = bidQty.toFixed(2);
       askQtyEl.textContent = askQty.toFixed(2);
-
-      const total = bidQty + askQty + 0.00001;
-      const bidRatio = (bidQty / total) * 100;
-      bidBar.style.width = bidRatio + "%";
-      askBar.style.width = (100 - bidRatio) + "%";
-
-      // 📈 Delta = Buy - Sell
-      drawDelta(ctxDelta, bidQty - askQty);
-
-      // 📉 Imbalance % = (bid - ask) / (bid + ask)
-      const imbalance = (bidQty - askQty) / (bidQty + askQty + 0.00001);
-      imbalanceHistory.push(imbalance);
-      if (imbalanceHistory.length > 800) imbalanceHistory.shift();
-
-      // 🧮 Smoothing
-      const smooth = movingAverage(imbalanceHistory, 20);
-      flowlineHistory.push(smooth);
-      if (flowlineHistory.length > 800) flowlineHistory.shift();
-
-      drawImbalance(ctxImbalance, imbalanceHistory, flowlineHistory);
     };
 
-    function drawDelta(ctx, delta) {
-      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-      const barHeight = Math.min(Math.abs(delta) * 2, ctx.canvas.height);
-      ctx.fillStyle = delta >= 0 ? "lime" : "red";
-      const y = delta >= 0 ? ctx.canvas.height - barHeight : 0;
-      ctx.fillRect(399, y, 2, barHeight);
-    }
+    function drawCandles() {
+      ctx.clearRect(0, 0, candleCanvas.width, candleCanvas.height);
+      const w = candleCanvas.width / candles.length;
+      const h = candleCanvas.height;
+      const prices = candles.flatMap(c => [c.high, c.low]);
+      const maxPrice = Math.max(...prices);
+      const minPrice = Math.min(...prices);
+      const priceRange = maxPrice - minPrice;
 
-    function drawImbalance(ctx, raw, smooth) {
-      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-      const mid = ctx.canvas.height / 2;
+      candles.forEach((c, i) => {
+        const x = i * w;
+        const openY = h - ((c.open - minPrice) / priceRange) * h;
+        const closeY = h - ((c.close - minPrice) / priceRange) * h;
+        const highY = h - ((c.high - minPrice) / priceRange) * h;
+        const lowY = h - ((c.low - minPrice) / priceRange) * h;
 
-      // RAW line
-      ctx.beginPath();
-      for (let i = 0; i < raw.length; i++) {
-        const y = mid - raw[i] * mid;
-        if (i === 0) ctx.moveTo(i, y);
-        else ctx.lineTo(i, y);
-      }
-      ctx.strokeStyle = raw[raw.length - 1] >= 0 ? "lime" : "red";
-      ctx.lineWidth = 1;
-      ctx.stroke();
+        const color = c.close >= c.open ? "#0f0" : "#f00";
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x + w / 2, highY);
+        ctx.lineTo(x + w / 2, lowY);
+        ctx.stroke();
 
-      // SMOOTH line
-      ctx.beginPath();
-      for (let i = 0; i < smooth.length; i++) {
-        const y = mid - smooth[i] * mid;
-        if (i === 0) ctx.moveTo(i, y);
-        else ctx.lineTo(i, y);
-      }
-      ctx.strokeStyle = "#00ffff";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.fillRect(x + 1, Math.min(openY, closeY), w - 2, Math.abs(closeY - openY));
 
-      // Center line
-      ctx.strokeStyle = "#333";
-      ctx.beginPath();
-      ctx.moveTo(0, mid);
-      ctx.lineTo(ctx.canvas.width, mid);
-      ctx.stroke();
-    }
-
-    function movingAverage(arr, period) {
-      const len = arr.length;
-      if (len < period) return 0;
-      const subset = arr.slice(len - period);
-      const sum = subset.reduce((a, b) => a + b, 0);
-      return sum / period;
+        // Madness overlay
+        const madness = Math.min(parseFloat(c.velocity) * 200000, 50); // scale
+        ctx.fillStyle = c.velocity > 0.0002 ? "yellow" : "rgba(255,255,255,0.2)";
+        ctx.fillRect(x + w - 3, highY - madness, 2, madness);
+      });
     }
   </script>
 </body>
