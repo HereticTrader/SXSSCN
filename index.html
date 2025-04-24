@@ -60,7 +60,7 @@
 
     const maxCandles = 60; // Keep ~30 minutes of 30s candles
 
-    const klineSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@kline_30s");
+    const klineSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@kline_1m");
     const bookSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@bookTicker");
 
     // Candle stream
