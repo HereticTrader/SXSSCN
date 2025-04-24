@@ -28,7 +28,8 @@
 
     let lastBid = null, lastAsk = null, lastTime = Date.now();
 
-    const socket = new WebSocket("wss://fstream.binance.com/ws/btcusdt@depth");
+    const socket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@depth");
+
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
