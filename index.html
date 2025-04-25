@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Sniffer v10.8 — Spark & Gravity Mode</title>
+  <title>Sniffer v10.9 — Transparent Candles for COG</title>
   <style>
     body {
       background: black;
@@ -101,7 +101,6 @@
       const min = Math.min(...priceCandles.map(c => c.low));
       const range = max - min || 1;
 
-      frontCtx.beginPath();
       priceCandles.forEach((c, i) => {
         const x = i * w;
         const oY = h - ((c.open - min) / range) * h;
@@ -111,7 +110,7 @@
         const gravity = (c.high + c.low + c.close) / 3;
         const gravityY = h - ((gravity - min) / range) * h;
 
-        const color = c.close >= c.open ? "#0f0" : "#f00";
+        const color = c.close >= c.open ? "rgba(0,255,0,0.5)" : "rgba(255,0,0,0.5)";
         frontCtx.strokeStyle = color;
         frontCtx.beginPath();
         frontCtx.moveTo(x + w / 2, hY);
@@ -121,7 +120,7 @@
         frontCtx.fillStyle = color;
         frontCtx.fillRect(x + 1, Math.min(oY, cY), w - 2, Math.abs(oY - cY));
 
-        // Draw gravity point
+        // Gravity dot
         frontCtx.fillStyle = "#00ffff";
         frontCtx.fillRect(x + w / 2 - 1, gravityY - 1, 2, 2);
       });
@@ -186,7 +185,6 @@
       const delta = (upSpeed - downSpeed) * 100000;
       deltaSpeedText.textContent = delta.toFixed(2);
 
-      // Spark alert coloring
       if (delta > 0.05) sparkDot.style.background = "#0f0";
       else if (delta < -0.05) sparkDot.style.background = "#f00";
       else sparkDot.style.background = "#222";
