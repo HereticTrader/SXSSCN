@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Sniffer v8.0 — Pulse Trails + Velocity</title>
+  <title>Sniffer v9.0 — Chart Dashboard Mode</title>
   <style>
     body {
       background: black;
@@ -10,17 +10,21 @@
       font-family: monospace;
       padding: 20px;
       display: flex;
-      gap: 40px;
+      flex-direction: column;
+      align-items: center;
     }
-    .chart-container {
-      flex: 1;
+    .dashboard-row {
+      display: flex;
+      width: 100%;
+      justify-content: space-around;
+      margin-top: 10px;
+    }
+    .chart-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
     h1 { color: #0ff; }
-    .section-title {
-      margin-top: 10px;
-      color: #0ff;
-      font-weight: bold;
-    }
     canvas {
       border: 1px solid #0f0;
       background: #111;
@@ -34,179 +38,24 @@
   </style>
 </head>
 <body>
-  <div class="chart-container">
-    <h1>ALCH/USDT — Real-Time Pulse Candles</h1>
-    <div class="section-title">📊 Multi Candle History</div>
-    <canvas id="priceCanvas" width="600" height="200"></canvas>
-    <div class="notify" id="speedNotify">⚡️ Speed detection pending...</div>
-    <div class="notify" id="liveSpeed">🕒 Live Speed Monitor — waiting for ticks...</div>
+  <h1>🚗 ALCH/USDT — Chart Dashboard</h1>
+  <div class="chart-wrapper">
+    <canvas id="frontWindowChart" width="1000" height="240"></canvas>
   </div>
 
-  <div class="chart-container">
-    <div class="section-title">🔬 Current Candle Microscope</div>
-    <canvas id="singleCandleCanvas" width="400" height="200"></canvas>
+  <div class="dashboard-row">
+    <div class="chart-wrapper">
+      <div class="notify" id="speedNotify">⚡️ Speed detection pending...</div>
+      <div class="notify" id="liveSpeed">🕒 Live Speed Monitor — waiting for ticks...</div>
+    </div>
+    <div class="chart-wrapper">
+      <canvas id="singleCandleCanvas" width="300" height="200"></canvas>
+      <div class="notify">🔬 Candle Microscope</div>
+    </div>
+    <div class="chart-wrapper">
+      <canvas id="gaugeCanvas" width="200" height="200"></canvas>
+      <div class="notify">🚦 Speedometer</div>
+    </div>
   </div>
-
-  <script>
-    const priceCanvas = document.getElementById("priceCanvas");
-    const singleCanvas = document.getElementById("singleCandleCanvas");
-    const ctx = priceCanvas.getContext("2d");
-    const singleCtx = singleCanvas.getContext("2d");
-    const notify = document.getElementById("speedNotify");
-    const liveSpeed = document.getElementById("liveSpeed");
-    const maxCandles = 12;
-    const candleDuration = 60 * 1000;
-
-    let candles = [];
-    let currentCandle = null;
-    let candleStart = Date.now();
-    let lastPrice = null;
-    let upTicks = 0, downTicks = 0;
-    let tickHistory = [];
-    let speedHistory = [];
-
-    const tradeSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@trade");
-
-    tradeSocket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      const price = parseFloat(data.p);
-      const now = Date.now();
-
-      if (!currentCandle || now - candleStart >= candleDuration) {
-        if (currentCandle) {
-          candles.push(currentCandle);
-          if (candles.length > maxCandles) candles.shift();
-        }
-        currentCandle = { open: price, high: price, low: price, close: price };
-        candleStart = now;
-        tickHistory = [];
-        speedHistory = [];
-
-        const verdict = upTicks > downTicks ? "🔼 Upticks DOMINATE" : downTicks > upTicks ? "🔽 Downticks DOMINATE" : "⚡️ Even Speed";
-        notify.textContent = `⚖️ Last Candle Speed — ${verdict}`;
-        upTicks = 0;
-        downTicks = 0;
-      } else {
-        currentCandle.high = Math.max(currentCandle.high, price);
-        currentCandle.low = Math.min(currentCandle.low, price);
-        currentCandle.close = price;
-      }
-
-      if (lastPrice !== null) {
-        if (price > lastPrice) upTicks++;
-        else if (price < lastPrice) downTicks++;
-
-        const dt = (now - tickHistory[tickHistory.length - 1]?.time || 1) / 1000;
-        const dp = Math.abs(price - lastPrice);
-        const speed = dp / dt;
-        speedHistory.push(speed);
-        if (speedHistory.length > 100) speedHistory.shift();
-      }
-
-      lastPrice = price;
-      tickHistory.push({ price, time: now });
-
-      const liveVerdict = upTicks > downTicks ? "🔼 More Upticks" : downTicks > upTicks ? "🔽 More Downticks" : "⚖️ Balanced";
-      liveSpeed.textContent = `🕒 Live Speed Monitor — ${liveVerdict}`;
-
-      drawCandles();
-      drawSingleCandle();
-    };
-
-    function drawCandles() {
-      ctx.clearRect(0, 0, priceCanvas.width, priceCanvas.height);
-      const w = priceCanvas.width / maxCandles;
-      const h = priceCanvas.height;
-      const full = [...candles, currentCandle];
-      const prices = full.flatMap(c => [c.high, c.low]);
-      const max = Math.max(...prices);
-      const min = Math.min(...prices);
-      const range = max - min || 1;
-
-      ctx.strokeStyle = "#333";
-      ctx.lineWidth = 0.5;
-      for (let i = 0; i <= 5; i++) {
-        const y = i * (h / 5);
-        const priceLevel = max - (range * i / 5);
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(priceCanvas.width, y);
-        ctx.stroke();
-        ctx.fillStyle = "#0ff";
-        ctx.fillText(priceLevel.toFixed(4), priceCanvas.width - 60, y + 10);
-      }
-
-      full.forEach((c, i) => {
-        const x = i * w;
-        const oY = h - ((c.open - min) / range) * h;
-        const cY = h - ((c.close - min) / range) * h;
-        const hY = h - ((c.high - min) / range) * h;
-        const lY = h - ((c.low - min) / range) * h;
-        const color = c.close >= c.open ? "#0f0" : "#f00";
-        ctx.strokeStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(x + w / 2, hY);
-        ctx.lineTo(x + w / 2, lY);
-        ctx.stroke();
-        ctx.fillStyle = color;
-        ctx.fillRect(x + 1, Math.min(oY, cY), w - 2, Math.abs(oY - cY));
-      });
-    }
-
-    function drawSingleCandle() {
-      singleCtx.clearRect(0, 0, singleCanvas.width, singleCanvas.height);
-      const h = singleCanvas.height;
-      const w = singleCanvas.width;
-      if (!currentCandle) return;
-
-      const max = currentCandle.high;
-      const min = currentCandle.low;
-      const range = max - min || 1;
-
-      // Draw tick trail lines
-      singleCtx.beginPath();
-      tickHistory.forEach((tick, i) => {
-        const x = (i / tickHistory.length) * w;
-        const y = h - ((tick.price - min) / range) * h;
-        if (i === 0) singleCtx.moveTo(x, y);
-        else singleCtx.lineTo(x, y);
-      });
-      singleCtx.strokeStyle = "#0ff";
-      singleCtx.lineWidth = 1;
-      singleCtx.stroke();
-
-      // Draw individual tick points
-      tickHistory.forEach((tick, i) => {
-        const x = (i / tickHistory.length) * w;
-        const y = h - ((tick.price - min) / range) * h;
-        singleCtx.fillStyle = (i === 0 || tick.price >= tickHistory[i - 1].price) ? "#0f0" : "#f00";
-        singleCtx.fillRect(x - 1, y - 1, 2, 2);
-      });
-
-      // Draw speed curve
-      singleCtx.beginPath();
-      speedHistory.forEach((v, i) => {
-        const x = (i / speedHistory.length) * w;
-        const y = h - (v * 5000);
-        if (i === 0) singleCtx.moveTo(x, y);
-        else singleCtx.lineTo(x, y);
-      });
-      singleCtx.strokeStyle = "rgba(255,255,0,0.7)";
-      singleCtx.stroke();
-
-      // Price levels
-      for (let i = 0; i <= 5; i++) {
-        const y = i * (h / 5);
-        const priceLevel = max - (range * i / 5);
-        singleCtx.strokeStyle = "#222";
-        singleCtx.beginPath();
-        singleCtx.moveTo(0, y);
-        singleCtx.lineTo(w, y);
-        singleCtx.stroke();
-        singleCtx.fillStyle = "#0ff";
-        singleCtx.fillText(priceLevel.toFixed(4), w - 50, y + 10);
-      }
-    }
-  </script>
 </body>
 </html>
