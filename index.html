@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Sniffer v10.9 — Transparent Candles for COG</title>
+  <title>Sniffer v10.9 — Transparent Candles & COG Boost</title>
   <style>
     body {
       background: black;
@@ -120,9 +120,10 @@
         frontCtx.fillStyle = color;
         frontCtx.fillRect(x + 1, Math.min(oY, cY), w - 2, Math.abs(oY - cY));
 
-        // Gravity dot
         frontCtx.fillStyle = "#00ffff";
-        frontCtx.fillRect(x + w / 2 - 1, gravityY - 1, 2, 2);
+        frontCtx.beginPath();
+        frontCtx.arc(x + w / 2, gravityY, 3, 0, 2 * Math.PI);
+        frontCtx.fill();
       });
 
       frontCtx.fillStyle = "#0ff";
@@ -138,7 +139,7 @@
       priceCandles.forEach((c, i) => {
         const x = i * w;
         const vHeight = (c.volume || 1) / maxVol * h;
-        const color = c.close >= c.open ? "#0f0" : "#f00";
+        const color = c.close >= c.open ? "rgba(0,255,0,0.5)" : "rgba(255,0,0,0.5)";
         volumeCtx.fillStyle = color;
         volumeCtx.fillRect(x + 1, h - vHeight, w - 2, vHeight);
       });
