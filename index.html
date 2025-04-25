@@ -1,116 +1,89 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ALCH/USDT Sniffer v6.2 – Divine Split View</title>
+  <meta charset="UTF-8">
+  <title>ALCH/USDT Sniffer v6.3 — 12x5s Grid</title>
   <style>
     body {
-      background-color: #000;
-      color: #0ff;
+      background: black;
+      color: #00ffff;
       font-family: monospace;
-      padding: 10px;
+      margin: 0;
+      padding: 20px;
     }
-    .chart-title {
-      font-size: 1.5em;
-      margin-bottom: 8px;
+    h1 {
+      margin-bottom: 20px;
     }
-    .chart-box {
-      border: 1px solid #0f0;
-      margin: 8px 0;
-      padding: 4px;
-      background-color: #111;
+    .chart {
+      display: flex;
+      align-items: flex-end;
+      height: 300px;
+      border: 2px solid #00ff00;
+      position: relative;
+      margin-bottom: 20px;
     }
-    canvas {
-      display: block;
-      background-color: #111;
-      margin: auto;
+    .bar {
+      width: 2px;
+      margin-right: 1px;
+      display: inline-block;
+      position: relative;
+    }
+    .green { background: #00ff00; }
+    .red { background: #ff0000; }
+    .separator {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: #00ffff;
+      opacity: 0.3;
     }
     .price-label {
       position: absolute;
-      color: cyan;
-      right: 20px;
+      right: 5px;
       top: 5px;
+      color: #00ffff;
       font-size: 14px;
     }
   </style>
 </head>
 <body>
-  <div class="chart-title">ALCH/USDT Sniffer v6.2 – Candles + 12-Part Energy Bars</div>
 
-  <div class="chart-box">
-    <div class="price-label" id="priceLabel">Price: 0.00000</div>
-    <canvas id="candleCanvas" width="1000" height="300"></canvas>
+  <h1>ALCH/USDT Sniffer v6.3 — 12x5s Grid</h1>
+  <div class="chart" id="chart">
+    <div class="price-label" id="priceLabel">Price: ...</div>
   </div>
 
   <script>
-    const ctx = document.getElementById("candleCanvas").getContext("2d");
+    const chart = document.getElementById("chart");
     const priceLabel = document.getElementById("priceLabel");
-    const WIDTH = 1000;
-    const HEIGHT = 300;
-    const candles = 30;
-    const candleWidth = 20;
+    const barCount = 12 * 30; // 30 minutes of 12 x 5s bars
 
-    // Dummy data generator
-    function generateCandles(n) {
-      let arr = [];
-      let price = 0.225;
-      for (let i = 0; i < n; i++) {
-        let open = price;
-        let close = +(price + (Math.random() - 0.5) * 0.01).toFixed(5);
-        let high = Math.max(open, close) + Math.random() * 0.005;
-        let low = Math.min(open, close) - Math.random() * 0.005;
-        let segments = Array.from({ length: 12 }, () => Math.random());
-        price = close;
-        arr.push({ open, close, high, low, segments });
-      }
-      return arr;
+    function getRandomHeight() {
+      return Math.floor(Math.random() * 200 + 20);
     }
 
-    const data = generateCandles(candles);
+    function renderBars() {
+      chart.innerHTML = "<div class='price-label' id='priceLabel'>Price: 0.223xx</div>";
+      for (let i = 0; i < barCount; i++) {
+        const div = document.createElement("div");
+        div.classList.add("bar");
+        const height = getRandomHeight();
+        div.style.height = `${height}px`;
+        div.classList.add(height % 2 === 0 ? "green" : "red");
+        chart.appendChild(div);
 
-    function draw() {
-      ctx.clearRect(0, 0, WIDTH, HEIGHT);
-      ctx.strokeStyle = "#0f0";
-      ctx.strokeRect(0, 0, WIDTH, HEIGHT);
-
-      const maxH = 0.24, minL = 0.215;
-      const priceRange = maxH - minL;
-
-      for (let i = 0; i < candles; i++) {
-        const { open, close, high, low, segments } = data[i];
-        const x = i * (candleWidth + 2);
-        const yHigh = HEIGHT - ((high - minL) / priceRange) * HEIGHT;
-        const yLow = HEIGHT - ((low - minL) / priceRange) * HEIGHT;
-        const yOpen = HEIGHT - ((open - minL) / priceRange) * HEIGHT;
-        const yClose = HEIGHT - ((close - minL) / priceRange) * HEIGHT;
-
-        // Wick
-        ctx.beginPath();
-        ctx.strokeStyle = "gray";
-        ctx.moveTo(x + candleWidth / 2, yHigh);
-        ctx.lineTo(x + candleWidth / 2, yLow);
-        ctx.stroke();
-
-        // Body
-        ctx.fillStyle = close >= open ? "#0f0" : "#f00";
-        ctx.fillRect(x, Math.min(yOpen, yClose), candleWidth, Math.abs(yOpen - yClose));
-
-        // 12-Part Segment Bars Behind the Candle
-        const segmentHeight = HEIGHT * 0.6;
-        for (let j = 0; j < 12; j++) {
-          const seg = segments[j];
-          const barH = seg * segmentHeight;
-          ctx.fillStyle = close >= open ? "#090" : "#800";
-          ctx.fillRect(x + j * (candleWidth / 12), HEIGHT - barH, candleWidth / 12 - 1, barH);
+        if (i % 12 === 0) {
+          const separator = document.createElement("div");
+          separator.classList.add("separator");
+          separator.style.left = `${(i * 3)}px`;
+          chart.appendChild(separator);
         }
       }
-
-      const last = data[candles - 1];
-      priceLabel.textContent = `Price: ${last.close.toFixed(5)}`;
     }
 
-    draw();
+    renderBars();
   </script>
+
 </body>
 </html>
