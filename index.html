@@ -38,6 +38,10 @@
     #speedNumbers {
       font-size: 20px;
       margin-top: 15px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 5px;
     }
     .green { color: #0f0; }
     .red { color: #f00; }
@@ -54,14 +58,16 @@
 <body>
   <h1>🚗 ALCH/USDT — Chart Dashboard</h1>
   <div class="chart-wrapper">
+    <canvas id="oneMinuteCandleChart" width="1000" height="100"></canvas>
     <canvas id="frontWindowChart" width="1000" height="240"></canvas>
     <canvas id="volumeChart" width="1000" height="120"></canvas>
     <canvas id="speedOverlayChart" width="1000" height="100"></canvas>
   </div>
 
   <div id="speedNumbers">
-    🟢 UTS: <span class="green" id="uptickSpeed">0</span> — 🔴 DTS: <span class="red" id="downtickSpeed">0</span> — ⚡ Delta: <span id="deltaSpeed">0</span>
-    <span id="sparkDot" class="spark"></span>
+    🟢 UTS: <span class="green" id="uptickSpeed">0</span>
+    🔴 DTS: <span class="red" id="downtickSpeed">0</span>
+    ⚡ Delta: <span id="deltaSpeed">0</span> <span id="sparkDot" class="spark"></span>
   </div>
 
   <div class="dashboard-row">
@@ -75,6 +81,7 @@
     const frontCtx = document.getElementById("frontWindowChart").getContext("2d");
     const volumeCtx = document.getElementById("volumeChart").getContext("2d");
     const overlayCtx = document.getElementById("speedOverlayChart").getContext("2d");
+    const oneMinuteCtx = document.getElementById("oneMinuteCandleChart").getContext("2d");
 
     const uptickSpeedText = document.getElementById("uptickSpeed");
     const downtickSpeedText = document.getElementById("downtickSpeed");
