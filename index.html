@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Sniffer v7.0 — Split Vision: History + Real-Time</title>
+  <title>Sniffer v8.0 — Pulse Trails + Velocity</title>
   <style>
     body {
       background: black;
@@ -55,14 +55,15 @@
     const notify = document.getElementById("speedNotify");
     const liveSpeed = document.getElementById("liveSpeed");
     const maxCandles = 12;
-    const candleDuration = 60 * 1000; // 1 minute
+    const candleDuration = 60 * 1000;
 
     let candles = [];
     let currentCandle = null;
     let candleStart = Date.now();
     let lastPrice = null;
     let upTicks = 0, downTicks = 0;
-    let tickHistory = []; // for single candle view
+    let tickHistory = [];
+    let speedHistory = [];
 
     const tradeSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@trade");
 
@@ -79,6 +80,7 @@
         currentCandle = { open: price, high: price, low: price, close: price };
         candleStart = now;
         tickHistory = [];
+        speedHistory = [];
 
         const verdict = upTicks > downTicks ? "🔼 Upticks DOMINATE" : downTicks > upTicks ? "🔽 Downticks DOMINATE" : "⚡️ Even Speed";
         notify.textContent = `⚖️ Last Candle Speed — ${verdict}`;
@@ -93,7 +95,14 @@
       if (lastPrice !== null) {
         if (price > lastPrice) upTicks++;
         else if (price < lastPrice) downTicks++;
+
+        const dt = (now - tickHistory[tickHistory.length - 1]?.time || 1) / 1000;
+        const dp = Math.abs(price - lastPrice);
+        const speed = dp / dt;
+        speedHistory.push(speed);
+        if (speedHistory.length > 100) speedHistory.shift();
       }
+
       lastPrice = price;
       tickHistory.push({ price, time: now });
 
@@ -123,7 +132,6 @@
         ctx.moveTo(0, y);
         ctx.lineTo(priceCanvas.width, y);
         ctx.stroke();
-
         ctx.fillStyle = "#0ff";
         ctx.fillText(priceLevel.toFixed(4), priceCanvas.width - 60, y + 10);
       }
@@ -134,14 +142,12 @@
         const cY = h - ((c.close - min) / range) * h;
         const hY = h - ((c.high - min) / range) * h;
         const lY = h - ((c.low - min) / range) * h;
-
         const color = c.close >= c.open ? "#0f0" : "#f00";
         ctx.strokeStyle = color;
         ctx.beginPath();
         ctx.moveTo(x + w / 2, hY);
         ctx.lineTo(x + w / 2, lY);
         ctx.stroke();
-
         ctx.fillStyle = color;
         ctx.fillRect(x + 1, Math.min(oY, cY), w - 2, Math.abs(oY - cY));
       });
@@ -156,14 +162,37 @@
       const max = currentCandle.high;
       const min = currentCandle.low;
       const range = max - min || 1;
-      const mid = h / 2;
 
+      // Draw tick trail lines
+      singleCtx.beginPath();
+      tickHistory.forEach((tick, i) => {
+        const x = (i / tickHistory.length) * w;
+        const y = h - ((tick.price - min) / range) * h;
+        if (i === 0) singleCtx.moveTo(x, y);
+        else singleCtx.lineTo(x, y);
+      });
+      singleCtx.strokeStyle = "#0ff";
+      singleCtx.lineWidth = 1;
+      singleCtx.stroke();
+
+      // Draw individual tick points
       tickHistory.forEach((tick, i) => {
         const x = (i / tickHistory.length) * w;
         const y = h - ((tick.price - min) / range) * h;
         singleCtx.fillStyle = (i === 0 || tick.price >= tickHistory[i - 1].price) ? "#0f0" : "#f00";
-        singleCtx.fillRect(x, y, 2, 2);
+        singleCtx.fillRect(x - 1, y - 1, 2, 2);
       });
+
+      // Draw speed curve
+      singleCtx.beginPath();
+      speedHistory.forEach((v, i) => {
+        const x = (i / speedHistory.length) * w;
+        const y = h - (v * 5000);
+        if (i === 0) singleCtx.moveTo(x, y);
+        else singleCtx.lineTo(x, y);
+      });
+      singleCtx.strokeStyle = "rgba(255,255,0,0.7)";
+      singleCtx.stroke();
 
       // Price levels
       for (let i = 0; i <= 5; i++) {
@@ -174,7 +203,6 @@
         singleCtx.moveTo(0, y);
         singleCtx.lineTo(w, y);
         singleCtx.stroke();
-
         singleCtx.fillStyle = "#0ff";
         singleCtx.fillText(priceLevel.toFixed(4), w - 50, y + 10);
       }
