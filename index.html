@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Sniffer v6.1 — Speed & Levels</title>
+  <title>Sniffer v6.2 — Real-Time Tick Speed</title>
   <style>
     body {
       background: black;
@@ -33,11 +33,13 @@
   <div class="section-title">📈 Live Evolving Candles (1m)</div>
   <canvas id="priceCanvas" width="800" height="200"></canvas>
   <div class="notify" id="speedNotify">⚡️ Speed detection pending...</div>
+  <div class="notify" id="liveSpeed">🕒 Live Speed Monitor — waiting for ticks...</div>
 
   <script>
     const priceCanvas = document.getElementById("priceCanvas");
     const ctx = priceCanvas.getContext("2d");
     const notify = document.getElementById("speedNotify");
+    const liveSpeed = document.getElementById("liveSpeed");
     const maxCandles = 12;
     const candleDuration = 60 * 1000; // 1 minute
 
@@ -62,9 +64,9 @@
         currentCandle = { open: price, high: price, low: price, close: price };
         candleStart = now;
 
-        // Evaluate tick speeds
+        // Final verdict for last candle
         const verdict = upTicks > downTicks ? "🔼 Upticks DOMINATE" : downTicks > upTicks ? "🔽 Downticks DOMINATE" : "⚡️ Even Speed";
-        notify.textContent = `⚖️ Current Candle Speed — ${verdict}`;
+        notify.textContent = `⚖️ Last Candle Speed — ${verdict}`;
 
         upTicks = 0;
         downTicks = 0;
@@ -79,6 +81,10 @@
         else if (price < lastPrice) downTicks++;
       }
       lastPrice = price;
+
+      // Live speed verdict
+      const liveVerdict = upTicks > downTicks ? "🔼 More Upticks" : downTicks > upTicks ? "🔽 More Downticks" : "⚖️ Balanced";
+      liveSpeed.textContent = `🕒 Live Speed Monitor — ${liveVerdict}`;
 
       drawCandles();
     };
