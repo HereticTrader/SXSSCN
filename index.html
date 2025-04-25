@@ -57,6 +57,7 @@
 <body>
   <h1>🚗 ALCH/USDT — Chart Dashboard</h1>
   <div class="chart-wrapper">
+    <canvas id="miniOverlayChart" width="1000" height="80"></canvas>
     <canvas id="frontWindowChart" width="1000" height="240"></canvas>
     <canvas id="volumeChart" width="1000" height="120"></canvas>
     <canvas id="speedOverlayChart" width="1000" height="100"></canvas>
@@ -79,14 +80,43 @@
     const frontCanvas = document.getElementById("frontWindowChart");
     const volumeCanvas = document.getElementById("volumeChart");
     const speedCanvas = document.getElementById("speedOverlayChart");
+    const overlayCanvas = document.getElementById("miniOverlayChart");
     const ctxFront = frontCanvas.getContext("2d");
     const ctxVol = volumeCanvas.getContext("2d");
     const ctxSpeed = speedCanvas.getContext("2d");
+    const ctxOverlay = overlayCanvas.getContext("2d");
 
     let candles = [];
     let volumeBars = [];
     let uptickSpeed = 0, downtickSpeed = 0;
     const maxLen = 60;
+
+    const drawOverlay = () => {
+      ctxOverlay.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+      const w = overlayCanvas.width / candles.length;
+      const prices = candles.flatMap(c => [c.high, c.low]);
+      const max = Math.max(...prices);
+      const min = Math.min(...prices);
+      const range = max - min || 1;
+
+      candles.forEach((c, i) => {
+        const x = i * w;
+        const oY = overlayCanvas.height - ((c.open - min) / range) * overlayCanvas.height;
+        const cY = overlayCanvas.height - ((c.close - min) / range) * overlayCanvas.height;
+        const hY = overlayCanvas.height - ((c.high - min) / range) * overlayCanvas.height;
+        const lY = overlayCanvas.height - ((c.low - min) / range) * overlayCanvas.height;
+        const color = c.close >= c.open ? "#0f0" : "#f00";
+
+        ctxOverlay.strokeStyle = color;
+        ctxOverlay.beginPath();
+        ctxOverlay.moveTo(x + w / 2, hY);
+        ctxOverlay.lineTo(x + w / 2, lY);
+        ctxOverlay.stroke();
+
+        ctxOverlay.fillStyle = color;
+        ctxOverlay.fillRect(x + 1, Math.min(oY, cY), w - 2, Math.abs(oY - cY));
+      });
+    };
 
     const drawCandles = () => {
       ctxFront.clearRect(0, 0, frontCanvas.width, frontCanvas.height);
@@ -160,6 +190,7 @@
 
       drawCandles();
       drawVolume();
+      drawOverlay();
     };
 
     const bookSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@bookTicker");
