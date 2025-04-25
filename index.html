@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Sniffer v10.7 — Volume Delta Coloring</title>
+  <title>Sniffer v10.8 — Spark & Gravity Mode</title>
   <style>
     body {
       background: black;
@@ -42,6 +42,13 @@
     .green { color: #0f0; }
     .red { color: #f00; }
     .yellow { color: #ff0; }
+    .spark {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-left: 10px;
+    }
   </style>
 </head>
 <body>
@@ -56,6 +63,7 @@
     🟢 Uptick Speed: <span class="green" id="uptickSpeed">0</span> —
     🔴 Downtick Speed: <span class="red" id="downtickSpeed">0</span> —
     ⚡ Delta: <span class="yellow" id="deltaSpeed">0</span>
+    <span id="sparkDot" class="spark"></span>
   </div>
 
   <div class="dashboard-row">
@@ -73,6 +81,7 @@
     const uptickSpeedText = document.getElementById("uptickSpeed");
     const downtickSpeedText = document.getElementById("downtickSpeed");
     const deltaSpeedText = document.getElementById("deltaSpeed");
+    const sparkDot = document.getElementById("sparkDot");
 
     let priceCandles = [];
     let speedData = [];
@@ -92,12 +101,15 @@
       const min = Math.min(...priceCandles.map(c => c.low));
       const range = max - min || 1;
 
+      frontCtx.beginPath();
       priceCandles.forEach((c, i) => {
         const x = i * w;
         const oY = h - ((c.open - min) / range) * h;
         const cY = h - ((c.close - min) / range) * h;
         const hY = h - ((c.high - min) / range) * h;
         const lY = h - ((c.low - min) / range) * h;
+        const gravity = (c.high + c.low + c.close) / 3;
+        const gravityY = h - ((gravity - min) / range) * h;
 
         const color = c.close >= c.open ? "#0f0" : "#f00";
         frontCtx.strokeStyle = color;
@@ -108,6 +120,10 @@
 
         frontCtx.fillStyle = color;
         frontCtx.fillRect(x + 1, Math.min(oY, cY), w - 2, Math.abs(oY - cY));
+
+        // Draw gravity point
+        frontCtx.fillStyle = "#00ffff";
+        frontCtx.fillRect(x + w / 2 - 1, gravityY - 1, 2, 2);
       });
 
       frontCtx.fillStyle = "#0ff";
@@ -169,6 +185,11 @@
       downtickSpeedText.textContent = (downSpeed * 100000).toFixed(2);
       const delta = (upSpeed - downSpeed) * 100000;
       deltaSpeedText.textContent = delta.toFixed(2);
+
+      // Spark alert coloring
+      if (delta > 0.05) sparkDot.style.background = "#0f0";
+      else if (delta < -0.05) sparkDot.style.background = "#f00";
+      else sparkDot.style.background = "#222";
 
       drawSpeedOverlay();
     }, 1000);
