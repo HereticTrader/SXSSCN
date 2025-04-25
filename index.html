@@ -1,97 +1,174 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>ALCH/USDT Sniffer v6.3 – Candles + Vertical Velocity Bars</title>
+  <meta charset="UTF-8" />
+  <title>Sniffer v5.0 — Dual Market Vision</title>
   <style>
     body {
       background: black;
-      color: #00ffff;
+      color: #0f0;
       font-family: monospace;
-      padding: 0;
-      margin: 0;
-    }
-    #chart {
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-end;
-      height: 100vh;
-      width: 100vw;
-      overflow: hidden;
       padding: 20px;
     }
-    .candle {
-      display: flex;
-      flex-direction: row;
-      align-items: flex-end;
-      margin-right: 1px;
-      border-right: 1px solid #222;
+    h1 { color: #0ff; }
+    .section-title {
+      margin-top: 20px;
+      color: #0ff;
+      font-weight: bold;
     }
-    .bar {
-      width: 5px;
-      margin: 0 1px;
-    }
-    .bar.green {
-      background: lime;
-    }
-    .bar.red {
-      background: red;
-    }
-    .candle-container {
-      display: flex;
-      flex-direction: row;
-      align-items: flex-end;
-      border-left: 1px solid #333;
-      padding: 2px;
-    }
-    #priceLabel {
-      position: absolute;
-      top: 20px;
-      right: 40px;
-      color: cyan;
-      font-size: 14px;
+    canvas {
+      border: 1px solid #0f0;
+      background: #111;
+      display: block;
+      margin-top: 10px;
     }
   </style>
 </head>
 <body>
-  <div id="priceLabel">Price: 0.00000</div>
-  <div id="chart"></div>
+  <h1>ALCH/USDT Sniffer v5.0 — Dual Market Oracle</h1>
+  <div class="section-title">📈 Price Candles (1m)</div>
+  <canvas id="priceCanvas" width="800" height="200"></canvas>
+
+  <div class="section-title">⚙️ Velocity + Delta + Imbalance Oscillator</div>
+  <canvas id="snifferCanvas" width="800" height="120"></canvas>
+
   <script>
-    const chart = document.getElementById("chart");
-    const priceLabel = document.getElementById("priceLabel");
+    const priceCanvas = document.getElementById("priceCanvas");
+    const snifferCanvas = document.getElementById("snifferCanvas");
+    const ctxPrice = priceCanvas.getContext("2d");
+    const ctxSniffer = snifferCanvas.getContext("2d");
 
-    function generateMockCandle(price) {
-      const container = document.createElement("div");
-      container.className = "candle-container";
+    let candles = [];
+    let velocityArr = [];
+    let imbalanceArr = [];
+    let deltaArr = [];
 
-      for (let i = 0; i < 12; i++) {
-        const bar = document.createElement("div");
-        bar.className = "bar";
+    let lastBid = null, lastAsk = null, lastTime = Date.now();
+    let velocity = 0;
 
-        const movement = Math.random();
-        const isUp = movement > 0.5;
-        const height = Math.floor(movement * 100);
+    const maxLen = 100;
 
-        bar.classList.add(isUp ? "green" : "red");
-        bar.style.height = `${height}px`;
+    // 📡 Candle Data
+    const klineSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@kline_1m");
 
-        container.appendChild(bar);
+    klineSocket.onmessage = (event) => {
+      const data = JSON.parse(event.data).k;
+      const open = parseFloat(data.o);
+      const high = parseFloat(data.h);
+      const low = parseFloat(data.l);
+      const close = parseFloat(data.c);
+
+      candles.push({ open, high, low, close });
+      if (candles.length > maxLen) candles.shift();
+
+      drawCandles();
+    };
+
+    // 📡 Order Book for Sniffer
+    const bookSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@bookTicker");
+
+    bookSocket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      const bid = parseFloat(data.b);
+      const ask = parseFloat(data.a);
+      const bidQty = parseFloat(data.B);
+      const askQty = parseFloat(data.A);
+
+      const now = Date.now();
+      const dt = (now - lastTime) / 1000;
+      if (lastBid !== null && lastAsk !== null && dt > 0) {
+        velocity = ((Math.abs(bid - lastBid) + Math.abs(ask - lastAsk)) / dt);
+        const imbalance = (bidQty - askQty) / (bidQty + askQty + 0.0001);
+        const delta = bidQty - askQty;
+
+        velocityArr.push(velocity);
+        imbalanceArr.push(imbalance);
+        deltaArr.push(delta);
+
+        if (velocityArr.length > maxLen) velocityArr.shift();
+        if (imbalanceArr.length > maxLen) imbalanceArr.shift();
+        if (deltaArr.length > maxLen) deltaArr.shift();
+
+        drawSniffer();
       }
+      lastBid = bid;
+      lastAsk = ask;
+      lastTime = now;
+    };
 
-      chart.appendChild(container);
-      priceLabel.innerText = `Price: ${price.toFixed(5)}`;
+    // 🕯️ Draw Candles
+    function drawCandles() {
+      ctxPrice.clearRect(0, 0, priceCanvas.width, priceCanvas.height);
+      const w = priceCanvas.width / candles.length;
+      const h = priceCanvas.height;
+      const prices = candles.flatMap(c => [c.high, c.low]);
+      const max = Math.max(...prices);
+      const min = Math.min(...prices);
+      const range = max - min;
+
+      candles.forEach((c, i) => {
+        const x = i * w;
+        const oY = h - ((c.open - min) / range) * h;
+        const cY = h - ((c.close - min) / range) * h;
+        const hY = h - ((c.high - min) / range) * h;
+        const lY = h - ((c.low - min) / range) * h;
+
+        const color = c.close >= c.open ? "#0f0" : "#f00";
+        ctxPrice.strokeStyle = color;
+        ctxPrice.beginPath();
+        ctxPrice.moveTo(x + w / 2, hY);
+        ctxPrice.lineTo(x + w / 2, lY);
+        ctxPrice.stroke();
+
+        ctxPrice.fillStyle = color;
+        ctxPrice.fillRect(x + 1, Math.min(oY, cY), w - 2, Math.abs(oY - cY));
+      });
     }
 
-    let currentPrice = 0.22;
+    // 🎛️ Draw Sniffer Oscillator
+    function drawSniffer() {
+      ctxSniffer.clearRect(0, 0, snifferCanvas.width, snifferCanvas.height);
+      const w = snifferCanvas.width / velocityArr.length;
+      const h = snifferCanvas.height;
 
-    setInterval(() => {
-      currentPrice += (Math.random() - 0.5) * 0.001;
-      generateMockCandle(currentPrice);
+      // Velocity Line (lime)
+      ctxSniffer.beginPath();
+      velocityArr.forEach((v, i) => {
+        const y = h - Math.min(v * 1000000, h);
+        if (i === 0) ctxSniffer.moveTo(i * w, y);
+        else ctxSniffer.lineTo(i * w, y);
+      });
+      ctxSniffer.strokeStyle = "lime";
+      ctxSniffer.lineWidth = 1;
+      ctxSniffer.stroke();
 
-      if (chart.children.length > 60) {
-        chart.removeChild(chart.children[0]);
-      }
-    }, 1000 * 5); // 5 seconds per bar, 12 bars = 1 minute
+      // Imbalance Flowline (cyan)
+      ctxSniffer.beginPath();
+      const mid = h / 2;
+      imbalanceArr.forEach((val, i) => {
+        const y = mid - val * mid;
+        if (i === 0) ctxSniffer.moveTo(i * w, y);
+        else ctxSniffer.lineTo(i * w, y);
+      });
+      ctxSniffer.strokeStyle = "#0ff";
+      ctxSniffer.lineWidth = 1;
+      ctxSniffer.stroke();
+
+      // Delta Histogram (green/red)
+      deltaArr.forEach((val, i) => {
+        const y = mid;
+        const height = Math.min(Math.abs(val) * 2, mid);
+        ctxSniffer.fillStyle = val >= 0 ? "#0f0" : "#f00";
+        ctxSniffer.fillRect(i * w, val >= 0 ? y - height : y, 2, height);
+      });
+
+      // Zero Line
+      ctxSniffer.strokeStyle = "#333";
+      ctxSniffer.beginPath();
+      ctxSniffer.moveTo(0, mid);
+      ctxSniffer.lineTo(snifferCanvas.width, mid);
+      ctxSniffer.stroke();
+    }
   </script>
 </body>
 </html>
