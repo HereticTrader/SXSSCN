@@ -36,6 +36,8 @@
     let candles = [];
     const maxLen = 12; // Only 12 candles visible
 
+    let glowMarkers = []; // Track timestamps of glow events
+
     // 🛱️ Candle Data
     const klineSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@kline_1m");
 
@@ -46,8 +48,11 @@
       const low = parseFloat(data.l);
       const close = parseFloat(data.c);
 
-      candles.push({ open, high, low, close });
+      candles.push({ open, high, low, close, timestamp: Date.now() });
+      glowMarkers.push(Date.now());
+
       if (candles.length > maxLen) candles.shift();
+      if (glowMarkers.length > maxLen) glowMarkers.shift();
 
       drawCandles();
     };
@@ -78,7 +83,19 @@
 
         ctxPrice.fillStyle = color;
         ctxPrice.fillRect(x + 1, Math.min(oY, cY), w - 2, Math.abs(oY - cY));
+
+        // 🔋 Glow pulse
+        const age = Date.now() - c.timestamp;
+        if (age < 500) {
+          const glowAlpha = 1 - age / 500;
+          ctxPrice.beginPath();
+          ctxPrice.arc(x + w / 2, hY - 5, 5, 0, 2 * Math.PI);
+          ctxPrice.fillStyle = `rgba(0, 255, 255, ${glowAlpha})`;
+          ctxPrice.fill();
+        }
       });
+
+      requestAnimationFrame(drawCandles);
     }
   </script>
 </body>
