@@ -2,158 +2,115 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Sniffer v6.1 — Split View</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ALCH/USDT Sniffer v6.2 – Divine Split View</title>
   <style>
     body {
-      background: black;
-      color: #0f0;
-      font-family: monospace;
-      padding: 20px;
-    }
-    h1 {
+      background-color: #000;
       color: #0ff;
+      font-family: monospace;
+      padding: 10px;
+    }
+    .chart-title {
+      font-size: 1.5em;
+      margin-bottom: 8px;
+    }
+    .chart-box {
+      border: 1px solid #0f0;
+      margin: 8px 0;
+      padding: 4px;
+      background-color: #111;
     }
     canvas {
-      border: 1px solid #0f0;
-      background: #111;
       display: block;
-      margin-top: 15px;
+      background-color: #111;
+      margin: auto;
+    }
+    .price-label {
+      position: absolute;
+      color: cyan;
+      right: 20px;
+      top: 5px;
+      font-size: 14px;
     }
   </style>
 </head>
 <body>
-  <h1>ALCH/USDT Sniffer v6.1 — Split View</h1>
+  <div class="chart-title">ALCH/USDT Sniffer v6.2 – Candles + 12-Part Energy Bars</div>
 
-  <!-- Upper: Traditional Candlestick Chart -->
-  <canvas id="candleCanvas" width="1000" height="300"></canvas>
-
-  <!-- Lower: Velocity Bars + Price Display -->
-  <canvas id="velocityCanvas" width="1000" height="150"></canvas>
+  <div class="chart-box">
+    <div class="price-label" id="priceLabel">Price: 0.00000</div>
+    <canvas id="candleCanvas" width="1000" height="300"></canvas>
+  </div>
 
   <script>
-    const candleCanvas = document.getElementById("candleCanvas");
-    const velocityCanvas = document.getElementById("velocityCanvas");
-    const ctxCandles = candleCanvas.getContext("2d");
-    const ctxVelocity = velocityCanvas.getContext("2d");
+    const ctx = document.getElementById("candleCanvas").getContext("2d");
+    const priceLabel = document.getElementById("priceLabel");
+    const WIDTH = 1000;
+    const HEIGHT = 300;
+    const candles = 30;
+    const candleWidth = 20;
 
-    const candles = [];
-    const velocities = [];
-    let lastClose = null;
-
-    let lastBid = null, lastAsk = null, lastTime = Date.now();
-    const maxLen = 100;
-
-    function calculateEMA(data, period) {
-      const k = 2 / (period + 1);
-      let emaArray = [];
-      let ema = data[0];
-      for (let i = 0; i < data.length; i++) {
-        ema = data[i] * k + ema * (1 - k);
-        emaArray.push(ema);
+    // Dummy data generator
+    function generateCandles(n) {
+      let arr = [];
+      let price = 0.225;
+      for (let i = 0; i < n; i++) {
+        let open = price;
+        let close = +(price + (Math.random() - 0.5) * 0.01).toFixed(5);
+        let high = Math.max(open, close) + Math.random() * 0.005;
+        let low = Math.min(open, close) - Math.random() * 0.005;
+        let segments = Array.from({ length: 12 }, () => Math.random());
+        price = close;
+        arr.push({ open, close, high, low, segments });
       }
-      return emaArray;
+      return arr;
     }
 
-    const klineSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@kline_1m");
-    klineSocket.onmessage = (event) => {
-      const data = JSON.parse(event.data).k;
-      const o = parseFloat(data.o), h = parseFloat(data.h), l = parseFloat(data.l), c = parseFloat(data.c);
-      candles.push({ o, h, l, c });
-      if (candles.length > maxLen) candles.shift();
-      lastClose = c;
-      drawCandles();
-      drawVelocity();
-    };
+    const data = generateCandles(candles);
 
-    const bookSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@bookTicker");
-    bookSocket.onmessage = (event) => {
-      const d = JSON.parse(event.data);
-      const bid = parseFloat(d.b), ask = parseFloat(d.a);
-      const now = Date.now();
-      const dt = (now - lastTime) / 1000;
-      if (lastBid !== null && lastAsk !== null && dt > 0) {
-        const v = (Math.abs(bid - lastBid) + Math.abs(ask - lastAsk)) / dt;
-        velocities.push(v);
-        if (velocities.length > maxLen) velocities.shift();
+    function draw() {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+      ctx.strokeStyle = "#0f0";
+      ctx.strokeRect(0, 0, WIDTH, HEIGHT);
+
+      const maxH = 0.24, minL = 0.215;
+      const priceRange = maxH - minL;
+
+      for (let i = 0; i < candles; i++) {
+        const { open, close, high, low, segments } = data[i];
+        const x = i * (candleWidth + 2);
+        const yHigh = HEIGHT - ((high - minL) / priceRange) * HEIGHT;
+        const yLow = HEIGHT - ((low - minL) / priceRange) * HEIGHT;
+        const yOpen = HEIGHT - ((open - minL) / priceRange) * HEIGHT;
+        const yClose = HEIGHT - ((close - minL) / priceRange) * HEIGHT;
+
+        // Wick
+        ctx.beginPath();
+        ctx.strokeStyle = "gray";
+        ctx.moveTo(x + candleWidth / 2, yHigh);
+        ctx.lineTo(x + candleWidth / 2, yLow);
+        ctx.stroke();
+
+        // Body
+        ctx.fillStyle = close >= open ? "#0f0" : "#f00";
+        ctx.fillRect(x, Math.min(yOpen, yClose), candleWidth, Math.abs(yOpen - yClose));
+
+        // 12-Part Segment Bars Behind the Candle
+        const segmentHeight = HEIGHT * 0.6;
+        for (let j = 0; j < 12; j++) {
+          const seg = segments[j];
+          const barH = seg * segmentHeight;
+          ctx.fillStyle = close >= open ? "#090" : "#800";
+          ctx.fillRect(x + j * (candleWidth / 12), HEIGHT - barH, candleWidth / 12 - 1, barH);
+        }
       }
-      lastBid = bid;
-      lastAsk = ask;
-      lastTime = now;
-    };
 
-    function drawCandles() {
-      ctxCandles.clearRect(0, 0, candleCanvas.width, candleCanvas.height);
-      const w = candleCanvas.width / candles.length;
-      const h = candleCanvas.height;
-      const prices = candles.flatMap(c => [c.h, c.l]);
-      const max = Math.max(...prices);
-      const min = Math.min(...prices);
-      const range = max - min;
-
-      const closes = candles.map(c => c.c);
-      const ema8 = calculateEMA(closes, 8);
-      const ema13 = calculateEMA(closes, 13);
-      const ema21 = calculateEMA(closes, 21);
-
-      candles.forEach((c, i) => {
-        const x = i * w;
-        const oY = h - ((c.o - min) / range) * h;
-        const cY = h - ((c.c - min) / range) * h;
-        const hY = h - ((c.h - min) / range) * h;
-        const lY = h - ((c.l - min) / range) * h;
-        const color = c.c >= c.o ? "#0f0" : "#f00";
-
-        ctxCandles.strokeStyle = color;
-        ctxCandles.beginPath();
-        ctxCandles.moveTo(x + w / 2, hY);
-        ctxCandles.lineTo(x + w / 2, lY);
-        ctxCandles.stroke();
-
-        ctxCandles.fillStyle = color;
-        ctxCandles.fillRect(x + 1, Math.min(oY, cY), w - 2, Math.max(2, Math.abs(oY - cY)));
-      });
-
-      drawLine(ctxCandles, ema8, "#8888ff", prices, h, w);
-      drawLine(ctxCandles, ema13, "#ffaa00", prices, h, w);
-      drawLine(ctxCandles, ema21, "#00ffff", prices, h, w);
+      const last = data[candles - 1];
+      priceLabel.textContent = `Price: ${last.close.toFixed(5)}`;
     }
 
-    function drawLine(ctx, arr, color, priceRange, h, w) {
-      const max = Math.max(...priceRange);
-      const min = Math.min(...priceRange);
-      const range = max - min;
-
-      ctx.strokeStyle = color;
-      ctx.beginPath();
-      arr.forEach((val, i) => {
-        const y = h - ((val - min) / range) * h;
-        const x = i * w + w / 2;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-    }
-
-    function drawVelocity() {
-      ctxVelocity.clearRect(0, 0, velocityCanvas.width, velocityCanvas.height);
-      const w = velocityCanvas.width / velocities.length;
-      const h = velocityCanvas.height;
-
-      velocities.forEach((v, i) => {
-        const barHeight = Math.min(v * 1000000, h - 10);
-        const x = i * w;
-        const y = h - barHeight;
-        ctxVelocity.fillStyle = "yellow";
-        ctxVelocity.fillRect(x + w / 2, y, 2, barHeight);
-      });
-
-      // Price label on right
-      if (lastClose !== null) {
-        ctxVelocity.fillStyle = "#0ff";
-        ctxVelocity.font = "16px monospace";
-        ctxVelocity.fillText(`Price: ${lastClose.toFixed(5)}`, velocityCanvas.width - 160, 20);
-      }
-    }
+    draw();
   </script>
 </body>
 </html>
