@@ -55,7 +55,7 @@
   <h1>🚗 ALCH/USDT — Chart Dashboard</h1>
   <div class="chart-wrapper">
     <canvas id="frontWindowChart" width="1000" height="240"></canvas>
-    <canvas id="volumeChart" width="1000" height="80"></canvas>
+    <canvas id="volumeChart" width="1000" height="120"></canvas>
     <canvas id="speedOverlayChart" width="1000" height="100"></canvas>
   </div>
 
@@ -132,9 +132,9 @@
     }
 
     function drawVolumeChart() {
-      volumeCtx.clearRect(0, 0, 1000, 80);
+      volumeCtx.clearRect(0, 0, 1000, 120);
       const w = 1000 / maxFrontCandles;
-      const h = 80;
+      const h = 120;
       const maxVol = Math.max(...priceCandles.map(c => c.volume || 1));
       priceCandles.forEach((c, i) => {
         const x = i * w;
