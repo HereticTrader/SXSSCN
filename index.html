@@ -58,8 +58,8 @@
   <h1>🚗 ALCH/USDT — Chart Dashboard</h1>
   <div class="chart-wrapper">
     <canvas id="miniOverlayChart" width="1000" height="80"></canvas>
-    <canvas id="volumeChart" width="1000" height="120"></canvas>
     <canvas id="frontWindowChart" width="1000" height="240"></canvas>
+    <canvas id="volumeChart" width="1000" height="120"></canvas>
     <canvas id="speedOverlayChart" width="1000" height="100"></canvas>
   </div>
 
@@ -76,9 +76,124 @@
     </div>
   </div>
 
-  <!-- The script remains the same and continues from here -->
   <script>
-    // Existing JS remains unchanged and functional
+    const miniCanvas = document.getElementById("miniOverlayChart");
+    const frontCanvas = document.getElementById("frontWindowChart");
+    const volumeCanvas = document.getElementById("volumeChart");
+    const speedCanvas = document.getElementById("speedOverlayChart");
+    const ctxMini = miniCanvas.getContext("2d");
+    const ctxFront = frontCanvas.getContext("2d");
+    const ctxVolume = volumeCanvas.getContext("2d");
+    const ctxSpeed = speedCanvas.getContext("2d");
+
+    let candles = [];
+    let volumes = [];
+    let maxCandles = 50;
+    let lastBid = null, lastAsk = null, lastTime = Date.now();
+
+    function drawCandles(ctx, width, height, source, opacity = 1.0) {
+      ctx.clearRect(0, 0, width, height);
+      if (source.length === 0) return;
+      let w = width / source.length;
+      let highs = source.map(c => c.high);
+      let lows = source.map(c => c.low);
+      let max = Math.max(...highs);
+      let min = Math.min(...lows);
+
+      for (let i = 0; i < source.length; i++) {
+        let c = source[i];
+        let x = i * w;
+        let openY = height - ((c.open - min) / (max - min)) * height;
+        let closeY = height - ((c.close - min) / (max - min)) * height;
+        let highY = height - ((c.high - min) / (max - min)) * height;
+        let lowY = height - ((c.low - min) / (max - min)) * height;
+        let color = c.close >= c.open ? `rgba(0,255,0,${opacity})` : `rgba(255,0,0,${opacity})`;
+
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x + w / 2, highY);
+        ctx.lineTo(x + w / 2, lowY);
+        ctx.stroke();
+
+        ctx.fillStyle = color;
+        ctx.fillRect(x + 1, Math.min(openY, closeY), w - 2, Math.abs(openY - closeY));
+      }
+    }
+
+    function drawVolume() {
+      ctxVolume.clearRect(0, 0, volumeCanvas.width, volumeCanvas.height);
+      let w = volumeCanvas.width / volumes.length;
+      let maxVol = Math.max(...volumes.map(v => v.v));
+
+      volumes.forEach((v, i) => {
+        let h = (v.v / maxVol) * volumeCanvas.height;
+        ctxVolume.fillStyle = v.color;
+        ctxVolume.fillRect(i * w + 1, volumeCanvas.height - h, w - 2, h);
+      });
+    }
+
+    function drawSpeedLines(uts, dts) {
+      ctxSpeed.clearRect(0, 0, speedCanvas.width, speedCanvas.height);
+      ctxSpeed.strokeStyle = "#0f0";
+      ctxSpeed.beginPath();
+      ctxSpeed.moveTo(0, speedCanvas.height / 2 - uts * 1000);
+      ctxSpeed.lineTo(speedCanvas.width, speedCanvas.height / 2 - uts * 1000);
+      ctxSpeed.stroke();
+
+      ctxSpeed.strokeStyle = "#f00";
+      ctxSpeed.beginPath();
+      ctxSpeed.moveTo(0, speedCanvas.height / 2 + dts * 1000);
+      ctxSpeed.lineTo(speedCanvas.width, speedCanvas.height / 2 + dts * 1000);
+      ctxSpeed.stroke();
+    }
+
+    const klineSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@kline_1m");
+    klineSocket.onmessage = event => {
+      const k = JSON.parse(event.data).k;
+      const c = {
+        open: parseFloat(k.o),
+        high: parseFloat(k.h),
+        low: parseFloat(k.l),
+        close: parseFloat(k.c)
+      };
+      const v = {
+        v: parseFloat(k.v),
+        color: c.close >= c.open ? "rgba(0,255,0,0.4)" : "rgba(255,0,0,0.4)"
+      };
+      candles.push(c);
+      volumes.push(v);
+      if (candles.length > maxCandles) candles.shift();
+      if (volumes.length > maxCandles) volumes.shift();
+
+      drawCandles(ctxMini, miniCanvas.width, miniCanvas.height, candles, 1);
+      drawCandles(ctxFront, frontCanvas.width, frontCanvas.height, candles, 0.5);
+      drawVolume();
+    };
+
+    const bookSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@bookTicker");
+    bookSocket.onmessage = event => {
+      const data = JSON.parse(event.data);
+      const bid = parseFloat(data.b);
+      const ask = parseFloat(data.a);
+      const now = Date.now();
+      const dt = (now - lastTime) / 1000;
+
+      if (lastBid !== null && lastAsk !== null && dt > 0) {
+        const uts = bid > lastBid ? (bid - lastBid) / dt : 0;
+        const dts = ask < lastAsk ? (lastAsk - ask) / dt : 0;
+        const delta = uts - dts;
+
+        document.getElementById("uptickSpeed").textContent = uts.toFixed(2);
+        document.getElementById("downtickSpeed").textContent = dts.toFixed(2);
+        const deltaElem = document.getElementById("deltaSpeed");
+        deltaElem.textContent = delta.toFixed(2);
+        deltaElem.className = delta >= 0 ? "green" : "red";
+        drawSpeedLines(uts, dts);
+      }
+      lastBid = bid;
+      lastAsk = ask;
+      lastTime = now;
+    };
   </script>
 </body>
 </html>
