@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ALCHUSDT AI Candle Sniffer v4.2</title>
+  <style>
+    body {
+      background: black;
+      color: #0f0;
+      font-family: monospace;
+      padding: 20px;
+    }
+    h1 { color: #0ff; }
+    .velocity { font-size: 1.8em; margin-top: 10px; }
+    .highlight { color: #ff0; }
+    canvas {
+      border: 1px solid #0f0;
+      background: #111;
+      margin-top: 20px;
+    }
+    .section-title {
+      margin-top: 20px;
+      color: #0ff;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>ALCH/USDT AI Candle Sniffer v4.2</h1>
+
+  <div>Top Bid: <span id="topBid">...</span></div>
+  <div>Top Ask: <span id="topAsk">...</span></div>
+  <div>Bid Size: <span id="bidQty">...</span></div>
+  <div>Ask Size: <span id="askQty">...</span></div>
+  <div class="velocity">Velocity: <span id="velocity">0.00000000</span></div>
+
+  <div class="section-title">🕯️ 1-Min Candles + Velocity Madness + Price Line</div>
+  <canvas id="candleCanvas" width="800" height="200"></canvas>
+
+  <script>
+    const bidEl = document.getElementById("topBid");
+    const askEl = document.getElementById("topAsk");
+    const bidQtyEl = document.getElementById("bidQty");
+    const askQtyEl = document.getElementById("askQty");
+    const velocityEl = document.getElementById("velocity");
+
+    const candleCanvas = document.getElementById("candleCanvas");
+    const ctx = candleCanvas.getContext("2d");
+
+    let lastBid = null, lastAsk = null, lastTime = Date.now();
+    let velocity = 0;
+    let candles = [];
+
+    const maxCandles = 60; // last 60 minutes
+    const klineSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@kline_1m");
+    const bookSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@bookTicker");
+
+    klineSocket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      const k = data.k;
+      const open = parseFloat(k.o);
+      const high = parseFloat(k.h);
+      const low = parseFloat(k.l);
+      const close = parseFloat(k.c);
+
+      candles.push({ open, high, low, close, velocity });
+      if (candles.length > maxCandles) candles.shift();
+
+      drawCandles();
+    };
+
+    bookSocket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      const bid = parseFloat(data.b);
+      const ask = parseFloat(data.a);
+      const bidQty = parseFloat(data.B);
+      const askQty = parseFloat(data.A);
+
+      const now = Date.now();
+      const timeDiff = (now - lastTime) / 1000;
+      if (lastBid !== null && lastAsk !== null && timeDiff > 0) {
+        velocity = ((Math.abs(bid - lastBid) + Math.abs(ask - lastAsk)) / timeDiff).toFixed(8);
+        velocityEl.textContent = velocity;
+        velocityEl.className = parseFloat(velocity) > 0.0001 ? "velocity highlight" : "velocity";
+      }
+      lastBid = bid;
+      lastAsk = ask;
+      lastTime = now;
+
+      bidEl.textContent = bid.toFixed(5);
+      askEl.textContent = ask.toFixed(5);
+      bidQtyEl.textContent = bidQty.toFixed(2);
+      askQtyEl.textContent = askQty.toFixed(2);
+    };
+
+    function drawCandles() {
+      ctx.clearRect(0, 0, candleCanvas.width, candleCanvas.height);
+      const w = candleCanvas.width / candles.length;
+      const h = candleCanvas.height;
+      const prices = candles.flatMap(c => [c.high, c.low]);
+      const maxPrice = Math.max(...prices);
+      const minPrice = Math.min(...prices);
+      const priceRange = maxPrice - minPrice;
+
+      // ✨ Draw candles
+      candles.forEach((c, i) => {
+        const x = i * w;
+        const openY = h - ((c.open - minPrice) / priceRange) * h;
+        const closeY = h - ((c.close - minPrice) / priceRange) * h;
+        const highY = h - ((c.high - minPrice) / priceRange) * h;
+        const lowY = h - ((c.low - minPrice) / priceRange) * h;
+
+        const color = c.close >= c.open ? "#0f0" : "#f00";
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x + w / 2, highY);
+        ctx.lineTo(x + w / 2, lowY);
+        ctx.stroke();
+
+        ctx.fillStyle = color;
+        ctx.fillRect(x + 1, Math.min(openY, closeY), w - 2, Math.abs(closeY - openY));
+
+        // ⚡ Velocity madness
+        const madness = Math.min(parseFloat(c.velocity) * 200000, 50);
+        ctx.fillStyle = c.velocity > 0.0002 ? "yellow" : "rgba(255,255,255,0.15)";
+        ctx.fillRect(x + w - 3, highY - madness, 2, madness);
+      });
+
+      // ✨ Moving average
+      const emaPoints = getEMA(candles.map(c => c.close), 20);
+      ctx.beginPath();
+      emaPoints.forEach((yVal, i) => {
+        const y = h - ((yVal - minPrice) / priceRange) * h;
+        if (i === 0) ctx.moveTo(i * w + w / 2, y);
+        else ctx.lineTo(i * w + w / 2, y);
+      });
+      ctx.strokeStyle = "#00ffff";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // ✨ Live price dot
+      if (candles.length > 0) {
+        const last = candles[candles.length - 1];
+        const y = h - ((last.close - minPrice) / priceRange) * h;
+        ctx.beginPath();
+        ctx.arc(candleCanvas.width - w / 2, y, 3, 0, 2 * Math.PI);
+        ctx.fillStyle = "#fff";
+        ctx.fill();
+      }
+    }
+
+    // 🔁 Simple EMA calculator
+    function getEMA(data, period) {
+      const k = 2 / (period + 1);
+      let emaArray = [];
+      let ema = data[0];
+      data.forEach((value, index) => {
+        if (index === 0) emaArray.push(ema);
+        else {
+          ema = value * k + ema * (1 - k);
+          emaArray.push(ema);
+        }
+      });
+      return emaArray;
+    }
+  </script>
+</body>
+</html>
