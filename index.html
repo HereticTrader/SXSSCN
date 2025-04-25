@@ -152,11 +152,15 @@
         const yU = h - s.up * 1000000;
         const yD = h - s.down * 1000000;
 
+        overlayCtx.beginPath();
+        overlayCtx.arc(x, yU, 2, 0, 2 * Math.PI);
         overlayCtx.fillStyle = "#0f0";
-        overlayCtx.fillRect(x, yU, 2, 2);
+        overlayCtx.fill();
 
+        overlayCtx.beginPath();
+        overlayCtx.arc(x, yD, 2, 0, 2 * Math.PI);
         overlayCtx.fillStyle = "#f00";
-        overlayCtx.fillRect(x, yD, 2, 2);
+        overlayCtx.fill();
       });
     }
 
