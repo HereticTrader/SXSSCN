@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Sniffer v5.1 — Candle + Energy Oracle</title>
+  <title>Sniffer v6.0 — Candle + Velocity Bars</title>
   <style>
     body {
       background: black;
@@ -11,11 +11,6 @@
       padding: 20px;
     }
     h1 { color: #0ff; }
-    .section-title {
-      margin-top: 20px;
-      color: #0ff;
-      font-weight: bold;
-    }
     canvas {
       border: 1px solid #0f0;
       background: #111;
@@ -25,150 +20,120 @@
   </style>
 </head>
 <body>
-  <h1>ALCH/USDT Sniffer v5.1 — Dual Market Oracle</h1>
-  <div class="section-title">🕯️ Real Candlesticks + Vertical Energy Bars</div>
-  <canvas id="priceCanvas" width="800" height="240"></canvas>
-
-  <div class="section-title">⚙️ Velocity + Delta + Imbalance Oscillator</div>
-  <canvas id="snifferCanvas" width="800" height="120"></canvas>
+  <h1>ALCH/USDT Sniffer v6.0 — Candles + Vertical Velocity Bars</h1>
+  <canvas id="chart" width="1000" height="400"></canvas>
 
   <script>
-    const priceCanvas = document.getElementById("priceCanvas");
-    const snifferCanvas = document.getElementById("snifferCanvas");
-    const ctxPrice = priceCanvas.getContext("2d");
-    const ctxSniffer = snifferCanvas.getContext("2d");
+    const canvas = document.getElementById("chart");
+    const ctx = canvas.getContext("2d");
 
-    let candles = [];
-    let velocityArr = [], imbalanceArr = [], deltaArr = [];
-
+    const candles = [];
+    const velocities = [];
+    const ema8 = [], ema13 = [], ema21 = [];
     let lastBid = null, lastAsk = null, lastTime = Date.now();
-    let velocity = 0;
 
     const maxLen = 100;
 
-    // 📡 Price Candles
+    function calculateEMA(data, period) {
+      const k = 2 / (period + 1);
+      let emaArray = [];
+      let ema = data[0];
+      for (let i = 0; i < data.length; i++) {
+        ema = data[i] * k + ema * (1 - k);
+        emaArray.push(ema);
+      }
+      return emaArray;
+    }
+
+    // Klines (1m)
     const klineSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@kline_1m");
     klineSocket.onmessage = (event) => {
       const data = JSON.parse(event.data).k;
-      const open = parseFloat(data.o);
-      const high = parseFloat(data.h);
-      const low = parseFloat(data.l);
-      const close = parseFloat(data.c);
-
-      candles.push({ open, high, low, close, velocity });
+      const o = parseFloat(data.o), h = parseFloat(data.h), l = parseFloat(data.l), c = parseFloat(data.c);
+      candles.push({ o, h, l, c });
       if (candles.length > maxLen) candles.shift();
-      drawPrice();
+      drawChart();
     };
 
-    // 📡 Order Book - Velocity, Imbalance, Delta
+    // Book ticker for velocity
     const bookSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@bookTicker");
     bookSocket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      const bid = parseFloat(data.b);
-      const ask = parseFloat(data.a);
-      const bidQty = parseFloat(data.B);
-      const askQty = parseFloat(data.A);
-
+      const d = JSON.parse(event.data);
+      const bid = parseFloat(d.b), ask = parseFloat(d.a);
       const now = Date.now();
       const dt = (now - lastTime) / 1000;
       if (lastBid !== null && lastAsk !== null && dt > 0) {
-        velocity = ((Math.abs(bid - lastBid) + Math.abs(ask - lastAsk)) / dt);
-        const imbalance = (bidQty - askQty) / (bidQty + askQty + 0.0001);
-        const delta = bidQty - askQty;
-
-        velocityArr.push(velocity);
-        imbalanceArr.push(imbalance);
-        deltaArr.push(delta);
-
-        if (velocityArr.length > maxLen) velocityArr.shift();
-        if (imbalanceArr.length > maxLen) imbalanceArr.shift();
-        if (deltaArr.length > maxLen) deltaArr.shift();
-
-        drawSniffer();
+        const v = (Math.abs(bid - lastBid) + Math.abs(ask - lastAsk)) / dt;
+        velocities.push(v);
+        if (velocities.length > maxLen) velocities.shift();
       }
       lastBid = bid;
       lastAsk = ask;
       lastTime = now;
     };
 
-    function drawPrice() {
-      ctxPrice.clearRect(0, 0, priceCanvas.width, priceCanvas.height);
-      const w = priceCanvas.width / candles.length;
-      const h = priceCanvas.height;
-      const prices = candles.flatMap(c => [c.high, c.low]);
+    function drawChart() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const w = canvas.width / candles.length;
+      const h = canvas.height;
+      const prices = candles.flatMap(c => [c.h, c.l]);
       const max = Math.max(...prices);
       const min = Math.min(...prices);
       const range = max - min;
 
+      const closes = candles.map(c => c.c);
+      const ema8Arr = calculateEMA(closes, 8);
+      const ema13Arr = calculateEMA(closes, 13);
+      const ema21Arr = calculateEMA(closes, 21);
+
       candles.forEach((c, i) => {
         const x = i * w;
-        const openY = h - ((c.open - min) / range) * h;
-        const closeY = h - ((c.close - min) / range) * h;
-        const highY = h - ((c.high - min) / range) * h;
-        const lowY = h - ((c.low - min) / range) * h;
+        const oY = h - ((c.o - min) / range) * h;
+        const cY = h - ((c.c - min) / range) * h;
+        const hY = h - ((c.h - min) / range) * h;
+        const lY = h - ((c.l - min) / range) * h;
+        const color = c.c >= c.o ? "#0f0" : "#f00";
 
-        const color = c.close >= c.open ? "#0f0" : "#f00";
-        ctxPrice.strokeStyle = color;
+        // Wicks
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x + w / 2, hY);
+        ctx.lineTo(x + w / 2, lY);
+        ctx.stroke();
 
-        // 🕯️ Candle Wick
-        ctxPrice.beginPath();
-        ctxPrice.moveTo(x + w / 2, highY);
-        ctxPrice.lineTo(x + w / 2, lowY);
-        ctxPrice.stroke();
+        // Body
+        ctx.fillStyle = color;
+        ctx.fillRect(x + 1, Math.min(oY, cY), w - 2, Math.max(2, Math.abs(oY - cY)));
 
-        // 🕯️ Candle Body
-        ctxPrice.fillStyle = color;
-        ctxPrice.fillRect(x + 1, Math.min(openY, closeY), w - 2, Math.abs(openY - closeY));
-
-        // ⚡ Vertical velocity bar (thin bar on right)
-        const madness = Math.min(c.velocity * 1000000, 50);
-        ctxPrice.fillStyle = "yellow";
-        ctxPrice.fillRect(x + w - 2, highY - madness, 1.5, madness);
+        // Velocity Bar
+        if (velocities[i]) {
+          const vh = Math.min(velocities[i] * 1000000, h / 5);
+          ctx.fillStyle = "yellow";
+          ctx.fillRect(x + w - 3, hY - vh, 2, vh);
+        }
       });
+
+      // EMA lines
+      drawLine(ema8Arr, "#8888ff");
+      drawLine(ema13Arr, "#ffaa00");
+      drawLine(ema21Arr, "#00ffff");
     }
 
-    function drawSniffer() {
-      ctxSniffer.clearRect(0, 0, snifferCanvas.width, snifferCanvas.height);
-      const w = snifferCanvas.width / velocityArr.length;
-      const h = snifferCanvas.height;
-      const mid = h / 2;
-
-      // ⚡ Velocity Line
-      ctxSniffer.beginPath();
-      velocityArr.forEach((v, i) => {
-        const y = h - Math.min(v * 1000000, h);
-        if (i === 0) ctxSniffer.moveTo(i * w, y);
-        else ctxSniffer.lineTo(i * w, y);
+    function drawLine(arr, color) {
+      ctx.strokeStyle = color;
+      ctx.beginPath();
+      const h = canvas.height;
+      const prices = candles.flatMap(c => [c.h, c.l]);
+      const max = Math.max(...prices);
+      const min = Math.min(...prices);
+      const range = max - min;
+      arr.forEach((val, i) => {
+        const y = h - ((val - min) / range) * h;
+        const x = i * (canvas.width / candles.length) + 2;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
       });
-      ctxSniffer.strokeStyle = "lime";
-      ctxSniffer.lineWidth = 1;
-      ctxSniffer.stroke();
-
-      // 📉 Imbalance Curve
-      ctxSniffer.beginPath();
-      imbalanceArr.forEach((v, i) => {
-        const y = mid - v * mid;
-        if (i === 0) ctxSniffer.moveTo(i * w, y);
-        else ctxSniffer.lineTo(i * w, y);
-      });
-      ctxSniffer.strokeStyle = "#0ff";
-      ctxSniffer.lineWidth = 1;
-      ctxSniffer.stroke();
-
-      // 🔺 Delta Histogram
-      deltaArr.forEach((val, i) => {
-        const y = mid;
-        const height = Math.min(Math.abs(val) * 2, mid);
-        ctxSniffer.fillStyle = val >= 0 ? "#0f0" : "#f00";
-        ctxSniffer.fillRect(i * w, val >= 0 ? y - height : y, 2, height);
-      });
-
-      // Zero Line
-      ctxSniffer.strokeStyle = "#333";
-      ctxSniffer.beginPath();
-      ctxSniffer.moveTo(0, mid);
-      ctxSniffer.lineTo(snifferCanvas.width, mid);
-      ctxSniffer.stroke();
+      ctx.stroke();
     }
   </script>
 </body>
