@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Sniffer v10.0 — Dual Speedometers Activated</title>
+  <title>Sniffer v10.1 — Speed Timeline Overlay</title>
   <style>
     body {
       background: black;
@@ -41,6 +41,7 @@
   <h1>🚗 ALCH/USDT — Chart Dashboard</h1>
   <div class="chart-wrapper">
     <canvas id="frontWindowChart" width="1000" height="240"></canvas>
+    <canvas id="speedOverlayChart" width="1000" height="100"></canvas>
   </div>
 
   <div class="dashboard-row">
@@ -48,26 +49,14 @@
       <div class="notify" id="speedNotify">⚡️ Speed detection pending...</div>
       <div class="notify" id="liveSpeed">🕒 Live Speed Monitor — waiting for ticks...</div>
     </div>
-    <div class="chart-wrapper">
-      <canvas id="singleCandleCanvas" width="300" height="200"></canvas>
-      <div class="notify">🔬 Candle Microscope</div>
-    </div>
-    <div class="chart-wrapper">
-      <canvas id="gaugeDownCanvas" width="200" height="200"></canvas>
-      <div class="notify">🔻 Downtick Speed</div>
-    </div>
-    <div class="chart-wrapper">
-      <canvas id="gaugeUpCanvas" width="200" height="200"></canvas>
-      <div class="notify">🔺 Uptick Speed</div>
-    </div>
   </div>
 
   <script>
     const frontCtx = document.getElementById("frontWindowChart").getContext("2d");
-    const upCtx = document.getElementById("gaugeUpCanvas").getContext("2d");
-    const downCtx = document.getElementById("gaugeDownCanvas").getContext("2d");
+    const overlayCtx = document.getElementById("speedOverlayChart").getContext("2d");
 
     let priceCandles = [];
+    let speedData = [];
     const maxFrontCandles = 50;
 
     let lastPrice = null;
@@ -107,35 +96,35 @@
       frontCtx.fillText(`Price: ${priceCandles[priceCandles.length - 1].close.toFixed(5)}`, 910, 20);
     }
 
-    function drawDualGauge(ctx, speed, color, labelColor) {
-      ctx.clearRect(0, 0, 200, 200);
-      const radius = 80;
-      const centerX = 100;
-      const centerY = 100;
-      const angle = Math.min(speed * 6000, Math.PI);
+    function drawSpeedOverlay() {
+      overlayCtx.clearRect(0, 0, 1000, 100);
+      const w = 1000 / speedData.length;
+      const h = 100;
 
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, Math.PI, 2 * Math.PI);
-      ctx.strokeStyle = "#222";
-      ctx.lineWidth = 10;
-      ctx.stroke();
+      overlayCtx.beginPath();
+      speedData.forEach((s, i) => {
+        const x = i * w;
+        const yUp = h - Math.min(s.up * 200000, h);
+        const yDown = h - Math.min(s.down * 200000, h);
 
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, Math.PI, Math.PI + angle);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 10;
-      ctx.stroke();
+        overlayCtx.strokeStyle = "#0f0";
+        overlayCtx.beginPath();
+        overlayCtx.moveTo(x, h);
+        overlayCtx.lineTo(x, yUp);
+        overlayCtx.stroke();
 
-      ctx.fillStyle = labelColor;
-      ctx.font = "16px monospace";
-      ctx.fillText(`${(speed * 100000).toFixed(2)}`, centerX - 30, centerY);
+        overlayCtx.strokeStyle = "#f00";
+        overlayCtx.beginPath();
+        overlayCtx.moveTo(x + w / 2, h);
+        overlayCtx.lineTo(x + w / 2, yDown);
+        overlayCtx.stroke();
+      });
     }
 
-    const ws = new WebSocket("wss://fstream.binance.com/ws/alchusdt@trade");
-    ws.onmessage = (event) => {
+    const tradeSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@trade");
+    tradeSocket.onmessage = (event) => {
       const d = JSON.parse(event.data);
       const price = parseFloat(d.p);
-      const now = Date.now();
 
       if (lastPrice !== null) {
         const diff = price - lastPrice;
@@ -144,11 +133,7 @@
         if (diff > 0) upSpeed = abs / dt;
         else if (diff < 0) downSpeed = abs / dt;
       }
-
       lastPrice = price;
-
-      drawDualGauge(upCtx, upSpeed, "#0f0", "#0ff");
-      drawDualGauge(downCtx, downSpeed, "#f00", "#0ff");
     };
 
     const klineSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@kline_1m");
@@ -162,7 +147,12 @@
       };
       priceCandles.push(candle);
       if (priceCandles.length > maxFrontCandles) priceCandles.shift();
+
+      speedData.push({ up: upSpeed, down: downSpeed });
+      if (speedData.length > maxFrontCandles) speedData.shift();
+
       drawFrontChart();
+      drawSpeedOverlay();
     };
   </script>
 </body>
