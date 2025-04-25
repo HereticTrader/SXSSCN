@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Sniffer v10.2 — Speed Oscillator Lines</title>
+  <title>Sniffer v10.3 — Real-Time Speed Flow</title>
   <style>
     body {
       background: black;
@@ -139,6 +139,13 @@
       lastPrice = price;
     };
 
+    // Sample tick speed every 1 second to update speed overlay
+    setInterval(() => {
+      speedData.push({ up: upSpeed, down: downSpeed });
+      if (speedData.length > maxFrontCandles) speedData.shift();
+      drawSpeedOverlay();
+    }, 1000);
+
     const klineSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@kline_1m");
     klineSocket.onmessage = (event) => {
       const d = JSON.parse(event.data).k;
@@ -150,12 +157,7 @@
       };
       priceCandles.push(candle);
       if (priceCandles.length > maxFrontCandles) priceCandles.shift();
-
-      speedData.push({ up: upSpeed, down: downSpeed });
-      if (speedData.length > maxFrontCandles) speedData.shift();
-
       drawFrontChart();
-      drawSpeedOverlay();
     };
   </script>
 </body>
