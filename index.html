@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Sniffer v10.1 — Speed Timeline Overlay</title>
+  <title>Sniffer v10.2 — Speed Oscillator Lines</title>
   <style>
     body {
       background: black;
@@ -101,24 +101,27 @@
       const w = 1000 / speedData.length;
       const h = 100;
 
+      // GREEN UPTICK LINE
       overlayCtx.beginPath();
+      overlayCtx.strokeStyle = "#0f0";
       speedData.forEach((s, i) => {
         const x = i * w;
-        const yUp = h - Math.min(s.up * 200000, h);
-        const yDown = h - Math.min(s.down * 200000, h);
-
-        overlayCtx.strokeStyle = "#0f0";
-        overlayCtx.beginPath();
-        overlayCtx.moveTo(x, h);
-        overlayCtx.lineTo(x, yUp);
-        overlayCtx.stroke();
-
-        overlayCtx.strokeStyle = "#f00";
-        overlayCtx.beginPath();
-        overlayCtx.moveTo(x + w / 2, h);
-        overlayCtx.lineTo(x + w / 2, yDown);
-        overlayCtx.stroke();
+        const y = h - Math.min(s.up * 200000, h);
+        if (i === 0) overlayCtx.moveTo(x, y);
+        else overlayCtx.lineTo(x, y);
       });
+      overlayCtx.stroke();
+
+      // RED DOWNTICK LINE
+      overlayCtx.beginPath();
+      overlayCtx.strokeStyle = "#f00";
+      speedData.forEach((s, i) => {
+        const x = i * w;
+        const y = h - Math.min(s.down * 200000, h);
+        if (i === 0) overlayCtx.moveTo(x, y);
+        else overlayCtx.lineTo(x, y);
+      });
+      overlayCtx.stroke();
     }
 
     const tradeSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@trade");
