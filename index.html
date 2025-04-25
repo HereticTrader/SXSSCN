@@ -55,15 +55,18 @@
     <canvas id="miniOverlayChart" width="1000" height="80"></canvas>
     <canvas id="frontWindowChart" width="1000" height="240"></canvas>
     <canvas id="volumeChart" width="1000" height="120"></canvas>
+    <canvas id="imbalanceChart" width="1000" height="120"></canvas>
   </div>
 
   <script>
     const miniCanvas = document.getElementById("miniOverlayChart");
     const frontCanvas = document.getElementById("frontWindowChart");
     const volumeCanvas = document.getElementById("volumeChart");
+    const imbalanceCanvas = document.getElementById("imbalanceChart");
     const ctxMini = miniCanvas.getContext("2d");
     const ctxFront = frontCanvas.getContext("2d");
     const ctxVolume = volumeCanvas.getContext("2d");
+    const ctxImbalance = imbalanceCanvas.getContext("2d");
 
     let candles = [];
     let volumes = [];
@@ -110,6 +113,15 @@
       });
     }
 
+    function drawImbalanceChart() {
+      ctxImbalance.clearRect(0, 0, imbalanceCanvas.width, imbalanceCanvas.height);
+      let w = imbalanceCanvas.width / volumes.length;
+      volumes.forEach((v, i) => {
+        ctxImbalance.fillStyle = v.color;
+        ctxImbalance.fillRect(i * w + 1, imbalanceCanvas.height / 2, w - 2, imbalanceCanvas.height / 4);
+      });
+    }
+
     let klineSocket = null;
     function connectToPair(pair) {
       if (klineSocket) klineSocket.close();
@@ -139,6 +151,7 @@
         drawCandles(ctxMini, miniCanvas.width, miniCanvas.height, candles, 1);
         drawCandles(ctxFront, frontCanvas.width, frontCanvas.height, candles, 0.5);
         drawVolume();
+        drawImbalanceChart();
       };
     }
 
