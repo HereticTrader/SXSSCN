@@ -2,88 +2,96 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>ALCH/USDT Sniffer v6.3 — 12x5s Grid</title>
+  <title>ALCH/USDT Sniffer v6.3 – Candles + Vertical Velocity Bars</title>
   <style>
     body {
       background: black;
       color: #00ffff;
       font-family: monospace;
+      padding: 0;
       margin: 0;
+    }
+    #chart {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
       padding: 20px;
     }
-    h1 {
-      margin-bottom: 20px;
-    }
-    .chart {
+    .candle {
       display: flex;
+      flex-direction: row;
       align-items: flex-end;
-      height: 300px;
-      border: 2px solid #00ff00;
-      position: relative;
-      margin-bottom: 20px;
+      margin-right: 1px;
+      border-right: 1px solid #222;
     }
     .bar {
-      width: 2px;
-      margin-right: 1px;
-      display: inline-block;
-      position: relative;
+      width: 5px;
+      margin: 0 1px;
     }
-    .green { background: #00ff00; }
-    .red { background: #ff0000; }
-    .separator {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      width: 1px;
-      background: #00ffff;
-      opacity: 0.3;
+    .bar.green {
+      background: lime;
     }
-    .price-label {
+    .bar.red {
+      background: red;
+    }
+    .candle-container {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-end;
+      border-left: 1px solid #333;
+      padding: 2px;
+    }
+    #priceLabel {
       position: absolute;
-      right: 5px;
-      top: 5px;
-      color: #00ffff;
+      top: 20px;
+      right: 40px;
+      color: cyan;
       font-size: 14px;
     }
   </style>
 </head>
 <body>
-
-  <h1>ALCH/USDT Sniffer v6.3 — 12x5s Grid</h1>
-  <div class="chart" id="chart">
-    <div class="price-label" id="priceLabel">Price: ...</div>
-  </div>
-
+  <div id="priceLabel">Price: 0.00000</div>
+  <div id="chart"></div>
   <script>
     const chart = document.getElementById("chart");
     const priceLabel = document.getElementById("priceLabel");
-    const barCount = 12 * 30; // 30 minutes of 12 x 5s bars
 
-    function getRandomHeight() {
-      return Math.floor(Math.random() * 200 + 20);
-    }
+    function generateMockCandle(price) {
+      const container = document.createElement("div");
+      container.className = "candle-container";
 
-    function renderBars() {
-      chart.innerHTML = "<div class='price-label' id='priceLabel'>Price: 0.223xx</div>";
-      for (let i = 0; i < barCount; i++) {
-        const div = document.createElement("div");
-        div.classList.add("bar");
-        const height = getRandomHeight();
-        div.style.height = `${height}px`;
-        div.classList.add(height % 2 === 0 ? "green" : "red");
-        chart.appendChild(div);
+      for (let i = 0; i < 12; i++) {
+        const bar = document.createElement("div");
+        bar.className = "bar";
 
-        if (i % 12 === 0) {
-          const separator = document.createElement("div");
-          separator.classList.add("separator");
-          separator.style.left = `${(i * 3)}px`;
-          chart.appendChild(separator);
-        }
+        const movement = Math.random();
+        const isUp = movement > 0.5;
+        const height = Math.floor(movement * 100);
+
+        bar.classList.add(isUp ? "green" : "red");
+        bar.style.height = `${height}px`;
+
+        container.appendChild(bar);
       }
+
+      chart.appendChild(container);
+      priceLabel.innerText = `Price: ${price.toFixed(5)}`;
     }
 
-    renderBars();
-  </script>
+    let currentPrice = 0.22;
 
+    setInterval(() => {
+      currentPrice += (Math.random() - 0.5) * 0.001;
+      generateMockCandle(currentPrice);
+
+      if (chart.children.length > 60) {
+        chart.removeChild(chart.children[0]);
+      }
+    }, 1000 * 5); // 5 seconds per bar, 12 bars = 1 minute
+  </script>
 </body>
 </html>
