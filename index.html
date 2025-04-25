@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Sniffer v10.6 — Separated Volume + Delta</title>
+  <title>Sniffer v10.7 — Volume Delta Coloring</title>
   <style>
     body {
       background: black;
@@ -123,7 +123,8 @@
       priceCandles.forEach((c, i) => {
         const x = i * w;
         const vHeight = (c.volume || 1) / maxVol * h;
-        volumeCtx.fillStyle = "#666";
+        const color = c.close >= c.open ? "#0f0" : "#f00";
+        volumeCtx.fillStyle = color;
         volumeCtx.fillRect(x + 1, h - vHeight, w - 2, vHeight);
       });
     }
