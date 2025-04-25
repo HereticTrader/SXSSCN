@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Sniffer v10.5 — Volume + Delta Pulse</title>
+  <title>Sniffer v10.6 — Separated Volume + Delta</title>
   <style>
     body {
       background: black;
@@ -48,6 +48,7 @@
   <h1>🚗 ALCH/USDT — Chart Dashboard</h1>
   <div class="chart-wrapper">
     <canvas id="frontWindowChart" width="1000" height="240"></canvas>
+    <canvas id="volumeChart" width="1000" height="80"></canvas>
     <canvas id="speedOverlayChart" width="1000" height="100"></canvas>
   </div>
 
@@ -66,6 +67,7 @@
 
   <script>
     const frontCtx = document.getElementById("frontWindowChart").getContext("2d");
+    const volumeCtx = document.getElementById("volumeChart").getContext("2d");
     const overlayCtx = document.getElementById("speedOverlayChart").getContext("2d");
 
     const uptickSpeedText = document.getElementById("uptickSpeed");
@@ -88,15 +90,14 @@
       const h = 240;
       const max = Math.max(...priceCandles.map(c => c.high));
       const min = Math.min(...priceCandles.map(c => c.low));
-      const volMax = Math.max(...priceCandles.map(c => c.volume || 1));
       const range = max - min || 1;
 
       priceCandles.forEach((c, i) => {
         const x = i * w;
-        const oY = h - ((c.open - min) / range) * (h - 40);
-        const cY = h - ((c.close - min) / range) * (h - 40);
-        const hY = h - ((c.high - min) / range) * (h - 40);
-        const lY = h - ((c.low - min) / range) * (h - 40);
+        const oY = h - ((c.open - min) / range) * h;
+        const cY = h - ((c.close - min) / range) * h;
+        const hY = h - ((c.high - min) / range) * h;
+        const lY = h - ((c.low - min) / range) * h;
 
         const color = c.close >= c.open ? "#0f0" : "#f00";
         frontCtx.strokeStyle = color;
@@ -107,16 +108,24 @@
 
         frontCtx.fillStyle = color;
         frontCtx.fillRect(x + 1, Math.min(oY, cY), w - 2, Math.abs(oY - cY));
-
-        // Volume Bar (light gray)
-        const vHeight = (c.volume || 1) / volMax * 40;
-        frontCtx.fillStyle = "#666";
-        frontCtx.fillRect(x + 1, h - vHeight, w - 2, vHeight);
       });
 
       frontCtx.fillStyle = "#0ff";
       frontCtx.font = "12px monospace";
       frontCtx.fillText(`Price: ${priceCandles[priceCandles.length - 1].close.toFixed(5)}`, 910, 20);
+    }
+
+    function drawVolumeChart() {
+      volumeCtx.clearRect(0, 0, 1000, 80);
+      const w = 1000 / maxFrontCandles;
+      const h = 80;
+      const maxVol = Math.max(...priceCandles.map(c => c.volume || 1));
+      priceCandles.forEach((c, i) => {
+        const x = i * w;
+        const vHeight = (c.volume || 1) / maxVol * h;
+        volumeCtx.fillStyle = "#666";
+        volumeCtx.fillRect(x + 1, h - vHeight, w - 2, vHeight);
+      });
     }
 
     function drawSpeedOverlay() {
@@ -176,6 +185,7 @@
       priceCandles.push(candle);
       if (priceCandles.length > maxFrontCandles) priceCandles.shift();
       drawFrontChart();
+      drawVolumeChart();
     };
   </script>
 </body>
