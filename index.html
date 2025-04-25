@@ -60,9 +60,7 @@
   </div>
 
   <div id="speedNumbers">
-    🟢 Uptick Speed: <span class="green" id="uptickSpeed">0</span> —
-    🔴 Downtick Speed: <span class="red" id="downtickSpeed">0</span> —
-    ⚡ Delta: <span class="yellow" id="deltaSpeed">0</span>
+    🟢 UTS: <span class="green" id="uptickSpeed">0</span> — 🔴 DTS: <span class="red" id="downtickSpeed">0</span> — ⚡ Delta: <span id="deltaSpeed">0</span>
     <span id="sparkDot" class="spark"></span>
   </div>
 
@@ -149,16 +147,17 @@
       overlayCtx.clearRect(0, 0, 1000, 100);
       const w = 1000 / speedData.length;
       const h = 100;
-      overlayCtx.beginPath();
       speedData.forEach((s, i) => {
         const x = i * w;
-        const y = h / 2 - Math.max(Math.min((s.up - s.down) * 200000, h / 2), -h / 2);
-        if (i === 0) overlayCtx.moveTo(x, y);
-        else overlayCtx.lineTo(x, y);
+        const yU = h - s.up * 1000000;
+        const yD = h - s.down * 1000000;
+
+        overlayCtx.fillStyle = "#0f0";
+        overlayCtx.fillRect(x, yU, 2, 2);
+
+        overlayCtx.fillStyle = "#f00";
+        overlayCtx.fillRect(x, yD, 2, 2);
       });
-      overlayCtx.strokeStyle = "#ff0";
-      overlayCtx.lineWidth = 1.5;
-      overlayCtx.stroke();
     }
 
     const tradeSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@trade");
@@ -181,14 +180,13 @@
       speedData.push({ up: upSpeed, down: downSpeed });
       if (speedData.length > maxFrontCandles) speedData.shift();
 
+      const delta = (upSpeed - downSpeed) * 100000;
       uptickSpeedText.textContent = (upSpeed * 100000).toFixed(2);
       downtickSpeedText.textContent = (downSpeed * 100000).toFixed(2);
-      const delta = (upSpeed - downSpeed) * 100000;
       deltaSpeedText.textContent = delta.toFixed(2);
+      deltaSpeedText.className = delta > 0 ? "green" : delta < 0 ? "red" : "yellow";
 
-      if (delta > 0.05) sparkDot.style.background = "#0f0";
-      else if (delta < -0.05) sparkDot.style.background = "#f00";
-      else sparkDot.style.background = "#222";
+      sparkDot.style.background = delta > 0.05 ? "#0f0" : delta < -0.05 ? "#f00" : "#222";
 
       drawSpeedOverlay();
     }, 1000);
