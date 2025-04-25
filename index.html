@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Sniffer v6.0 — Real-Time Reactive Candles</title>
+  <title>Sniffer v6.1 — Speed & Levels</title>
   <style>
     body {
       background: black;
@@ -22,41 +22,63 @@
       display: block;
       margin-top: 10px;
     }
+    .notify {
+      margin-top: 10px;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
   <h1>ALCH/USDT — Real-Time Pulse Candles</h1>
   <div class="section-title">📈 Live Evolving Candles (1m)</div>
   <canvas id="priceCanvas" width="800" height="200"></canvas>
+  <div class="notify" id="speedNotify">⚡️ Speed detection pending...</div>
 
   <script>
     const priceCanvas = document.getElementById("priceCanvas");
     const ctx = priceCanvas.getContext("2d");
+    const notify = document.getElementById("speedNotify");
     const maxCandles = 12;
     const candleDuration = 60 * 1000; // 1 minute
 
     let candles = [];
     let currentCandle = null;
     let candleStart = Date.now();
+    let lastPrice = null;
+    let upTicks = 0, downTicks = 0;
 
     const tradeSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@trade");
 
     tradeSocket.onmessage = (event) => {
       const data = JSON.parse(event.data);
       const price = parseFloat(data.p);
-
       const now = Date.now();
-      if (!currentCandle || now - candleStart >= candleDuration) {
-        if (currentCandle) candles.push(currentCandle);
-        if (candles.length > maxCandles) candles.shift();
 
+      if (!currentCandle || now - candleStart >= candleDuration) {
+        if (currentCandle) {
+          candles.push(currentCandle);
+          if (candles.length > maxCandles) candles.shift();
+        }
         currentCandle = { open: price, high: price, low: price, close: price };
         candleStart = now;
+
+        // Evaluate tick speeds
+        const verdict = upTicks > downTicks ? "🔼 Upticks DOMINATE" : downTicks > upTicks ? "🔽 Downticks DOMINATE" : "⚡️ Even Speed";
+        notify.textContent = `⚖️ Current Candle Speed — ${verdict}`;
+
+        upTicks = 0;
+        downTicks = 0;
       } else {
         currentCandle.high = Math.max(currentCandle.high, price);
         currentCandle.low = Math.min(currentCandle.low, price);
         currentCandle.close = price;
       }
+
+      if (lastPrice !== null) {
+        if (price > lastPrice) upTicks++;
+        else if (price < lastPrice) downTicks++;
+      }
+      lastPrice = price;
 
       drawCandles();
     };
@@ -71,6 +93,21 @@
       const max = Math.max(...prices);
       const min = Math.min(...prices);
       const range = max - min || 1;
+
+      // Gridlines for price levels
+      ctx.strokeStyle = "#333";
+      ctx.lineWidth = 0.5;
+      for (let i = 0; i <= 5; i++) {
+        const y = i * (h / 5);
+        const priceLevel = max - (range * i / 5);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(priceCanvas.width, y);
+        ctx.stroke();
+
+        ctx.fillStyle = "#0ff";
+        ctx.fillText(priceLevel.toFixed(4), 5, y + 10);
+      }
 
       full.forEach((c, i) => {
         const x = i * w;
