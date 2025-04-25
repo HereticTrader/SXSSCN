@@ -58,7 +58,6 @@
 <body>
   <h1>🚗 ALCH/USDT — Chart Dashboard</h1>
   <div class="chart-wrapper">
-    <canvas id="oneMinuteCandleChart" width="1000" height="100"></canvas>
     <canvas id="frontWindowChart" width="1000" height="240"></canvas>
     <canvas id="volumeChart" width="1000" height="120"></canvas>
     <canvas id="speedOverlayChart" width="1000" height="100"></canvas>
@@ -76,53 +75,5 @@
       <div class="notify" id="liveSpeed">🕒 Live Speed Monitor — waiting for ticks...</div>
     </div>
   </div>
-
-  <script>
-    const oneMinCtx = document.getElementById("oneMinuteCandleChart").getContext("2d");
-    let oneMinuteCandles = [];
-    const maxOneMinBars = 50;
-
-    function drawOneMinuteChart() {
-      oneMinCtx.clearRect(0, 0, 1000, 100);
-      const w = 1000 / maxOneMinBars;
-      const h = 100;
-      const max = Math.max(...oneMinuteCandles.map(c => c.high));
-      const min = Math.min(...oneMinuteCandles.map(c => c.low));
-      const range = max - min || 1;
-
-      oneMinuteCandles.forEach((c, i) => {
-        const x = i * w;
-        const oY = h - ((c.open - min) / range) * h;
-        const cY = h - ((c.close - min) / range) * h;
-        const hY = h - ((c.high - min) / range) * h;
-        const lY = h - ((c.low - min) / range) * h;
-
-        const color = c.close >= c.open ? "#0f0" : "#f00";
-        oneMinCtx.strokeStyle = color;
-        oneMinCtx.beginPath();
-        oneMinCtx.moveTo(x + w / 2, hY);
-        oneMinCtx.lineTo(x + w / 2, lY);
-        oneMinCtx.stroke();
-
-        oneMinCtx.fillStyle = color;
-        oneMinCtx.fillRect(x + 1, Math.min(oY, cY), w - 2, Math.abs(oY - cY));
-      });
-    }
-
-    const klineSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@kline_1m");
-    klineSocket.onmessage = (event) => {
-      const d = JSON.parse(event.data).k;
-      const candle = {
-        open: parseFloat(d.o),
-        high: parseFloat(d.h),
-        low: parseFloat(d.l),
-        close: parseFloat(d.c),
-        volume: parseFloat(d.v)
-      };
-      oneMinuteCandles.push(candle);
-      if (oneMinuteCandles.length > maxOneMinBars) oneMinuteCandles.shift();
-      drawOneMinuteChart();
-    };
-  </script>
 </body>
 </html>
