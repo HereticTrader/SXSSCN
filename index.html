@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Sniffer v10.9 — Transparent Candles & COG Boost</title>
+  <title>Sniffer v11.0 — Transparent Candles & COG Boost</title>
   <style>
     body {
       background: black;
@@ -24,72 +24,50 @@
       flex-direction: column;
       align-items: center;
     }
-    .dashboard-row {
-      display: flex;
-      width: 100%;
-      justify-content: space-around;
+    #pairInput {
       margin-top: 10px;
+      padding: 5px;
+      background: #111;
+      color: #0f0;
+      border: 1px solid #0f0;
+      font-family: monospace;
+      font-size: 16px;
+      width: 200px;
     }
-    .notify {
-      margin-top: 10px;
+    #setPair {
+      margin-top: 5px;
+      background: #0f0;
+      border: none;
+      color: black;
       font-weight: bold;
-    }
-    #speedNumbers {
-      font-size: 20px;
-      margin-top: 15px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 5px;
-    }
-    .green { color: #0f0; }
-    .red { color: #f00; }
-    .yellow { color: #ff0; }
-    .spark {
-      display: inline-block;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      margin-left: 10px;
+      cursor: pointer;
+      padding: 5px 10px;
     }
   </style>
 </head>
 <body>
-  <h1>🚗 ALCH/USDT — Chart Dashboard</h1>
+  <h1 id="header">🚗 ALCH/USDT — Chart Dashboard</h1>
+
+  <input type="text" id="pairInput" placeholder="Enter pair e.g. arcusdt" />
+  <button id="setPair">Set Pair</button>
+
   <div class="chart-wrapper">
     <canvas id="miniOverlayChart" width="1000" height="80"></canvas>
     <canvas id="frontWindowChart" width="1000" height="240"></canvas>
     <canvas id="volumeChart" width="1000" height="120"></canvas>
-    <canvas id="speedOverlayChart" width="1000" height="100"></canvas>
-  </div>
-
-  <div id="speedNumbers">
-    🟢 UTS: <span class="green" id="uptickSpeed">0</span><br>
-    🔴 DTS: <span class="red" id="downtickSpeed">0</span><br>
-    ⚡ Delta: <span id="deltaSpeed">0</span> <span id="sparkDot" class="spark"></span>
-  </div>
-
-  <div class="dashboard-row">
-    <div class="chart-wrapper">
-      <div class="notify" id="speedNotify">⚡️ Speed detection pending...</div>
-      <div class="notify" id="liveSpeed">🕒 Live Speed Monitor — waiting for ticks...</div>
-    </div>
   </div>
 
   <script>
     const miniCanvas = document.getElementById("miniOverlayChart");
     const frontCanvas = document.getElementById("frontWindowChart");
     const volumeCanvas = document.getElementById("volumeChart");
-    const speedCanvas = document.getElementById("speedOverlayChart");
     const ctxMini = miniCanvas.getContext("2d");
     const ctxFront = frontCanvas.getContext("2d");
     const ctxVolume = volumeCanvas.getContext("2d");
-    const ctxSpeed = speedCanvas.getContext("2d");
 
     let candles = [];
     let volumes = [];
     let maxCandles = 50;
-    let lastBid = null, lastAsk = null, lastTime = Date.now();
 
     function drawCandles(ctx, width, height, source, opacity = 1.0) {
       ctx.clearRect(0, 0, width, height);
@@ -132,68 +110,44 @@
       });
     }
 
-    function drawSpeedLines(uts, dts) {
-      ctxSpeed.clearRect(0, 0, speedCanvas.width, speedCanvas.height);
-      ctxSpeed.strokeStyle = "#0f0";
-      ctxSpeed.beginPath();
-      ctxSpeed.moveTo(0, speedCanvas.height / 2 - uts * 1000);
-      ctxSpeed.lineTo(speedCanvas.width, speedCanvas.height / 2 - uts * 1000);
-      ctxSpeed.stroke();
+    let klineSocket = null;
+    function connectToPair(pair) {
+      if (klineSocket) klineSocket.close();
+      candles = [];
+      volumes = [];
 
-      ctxSpeed.strokeStyle = "#f00";
-      ctxSpeed.beginPath();
-      ctxSpeed.moveTo(0, speedCanvas.height / 2 + dts * 1000);
-      ctxSpeed.lineTo(speedCanvas.width, speedCanvas.height / 2 + dts * 1000);
-      ctxSpeed.stroke();
+      document.getElementById("header").textContent = `🚗 ${pair.toUpperCase()} — Chart Dashboard`;
+
+      klineSocket = new WebSocket(`wss://fstream.binance.com/ws/${pair}@kline_1m`);
+      klineSocket.onmessage = event => {
+        const k = JSON.parse(event.data).k;
+        const c = {
+          open: parseFloat(k.o),
+          high: parseFloat(k.h),
+          low: parseFloat(k.l),
+          close: parseFloat(k.c)
+        };
+        const v = {
+          v: parseFloat(k.v),
+          color: c.close >= c.open ? "rgba(0,255,0,0.4)" : "rgba(255,0,0,0.4)"
+        };
+        candles.push(c);
+        volumes.push(v);
+        if (candles.length > maxCandles) candles.shift();
+        if (volumes.length > maxCandles) volumes.shift();
+
+        drawCandles(ctxMini, miniCanvas.width, miniCanvas.height, candles, 1);
+        drawCandles(ctxFront, frontCanvas.width, frontCanvas.height, candles, 0.5);
+        drawVolume();
+      };
     }
 
-    const klineSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@kline_1m");
-    klineSocket.onmessage = event => {
-      const k = JSON.parse(event.data).k;
-      const c = {
-        open: parseFloat(k.o),
-        high: parseFloat(k.h),
-        low: parseFloat(k.l),
-        close: parseFloat(k.c)
-      };
-      const v = {
-        v: parseFloat(k.v),
-        color: c.close >= c.open ? "rgba(0,255,0,0.4)" : "rgba(255,0,0,0.4)"
-      };
-      candles.push(c);
-      volumes.push(v);
-      if (candles.length > maxCandles) candles.shift();
-      if (volumes.length > maxCandles) volumes.shift();
-
-      drawCandles(ctxMini, miniCanvas.width, miniCanvas.height, candles, 1);
-      drawCandles(ctxFront, frontCanvas.width, frontCanvas.height, candles, 0.5);
-      drawVolume();
+    document.getElementById("setPair").onclick = () => {
+      const input = document.getElementById("pairInput").value.trim().toLowerCase();
+      if (input) connectToPair(input);
     };
 
-    const bookSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@bookTicker");
-    bookSocket.onmessage = event => {
-      const data = JSON.parse(event.data);
-      const bid = parseFloat(data.b);
-      const ask = parseFloat(data.a);
-      const now = Date.now();
-      const dt = (now - lastTime) / 1000;
-
-      if (lastBid !== null && lastAsk !== null && dt > 0) {
-        const uts = bid > lastBid ? (bid - lastBid) / dt : 0;
-        const dts = ask < lastAsk ? (lastAsk - ask) / dt : 0;
-        const delta = uts - dts;
-
-        document.getElementById("uptickSpeed").textContent = uts.toFixed(2);
-        document.getElementById("downtickSpeed").textContent = dts.toFixed(2);
-        const deltaElem = document.getElementById("deltaSpeed");
-        deltaElem.textContent = delta.toFixed(2);
-        deltaElem.className = delta >= 0 ? "green" : "red";
-        drawSpeedLines(uts, dts);
-      }
-      lastBid = bid;
-      lastAsk = ask;
-      lastTime = now;
-    };
+    connectToPair("alchusdt");
   </script>
 </body>
 </html>
