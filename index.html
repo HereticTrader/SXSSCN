@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Sniffer v5.0 — ALCH/USDT Candles</title>
+  <title>Sniffer v6.0 — Real-Time Reactive Candles</title>
   <style>
     body {
       background: black;
@@ -25,49 +25,54 @@
   </style>
 </head>
 <body>
-  <h1>ALCH/USDT Sniffer v5.0 — Candles Only</h1>
-  <div class="section-title">📈 Price Candles (1m)</div>
+  <h1>ALCH/USDT — Real-Time Pulse Candles</h1>
+  <div class="section-title">📈 Live Evolving Candles (1m)</div>
   <canvas id="priceCanvas" width="800" height="200"></canvas>
 
   <script>
     const priceCanvas = document.getElementById("priceCanvas");
-    const ctxPrice = priceCanvas.getContext("2d");
+    const ctx = priceCanvas.getContext("2d");
+    const maxCandles = 12;
+    const candleDuration = 60 * 1000; // 1 minute
 
     let candles = [];
-    const maxLen = 12; // Only 12 candles visible
+    let currentCandle = null;
+    let candleStart = Date.now();
 
-    let glowMarkers = []; // Track timestamps of glow events
+    const tradeSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@trade");
 
-    // 🛱️ Candle Data
-    const klineSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@kline_1m");
+    tradeSocket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      const price = parseFloat(data.p);
 
-    klineSocket.onmessage = (event) => {
-      const data = JSON.parse(event.data).k;
-      const open = parseFloat(data.o);
-      const high = parseFloat(data.h);
-      const low = parseFloat(data.l);
-      const close = parseFloat(data.c);
+      const now = Date.now();
+      if (!currentCandle || now - candleStart >= candleDuration) {
+        if (currentCandle) candles.push(currentCandle);
+        if (candles.length > maxCandles) candles.shift();
 
-      candles.push({ open, high, low, close, timestamp: Date.now() });
-      glowMarkers.push(Date.now());
-
-      if (candles.length > maxLen) candles.shift();
-      if (glowMarkers.length > maxLen) glowMarkers.shift();
+        currentCandle = { open: price, high: price, low: price, close: price };
+        candleStart = now;
+      } else {
+        currentCandle.high = Math.max(currentCandle.high, price);
+        currentCandle.low = Math.min(currentCandle.low, price);
+        currentCandle.close = price;
+      }
 
       drawCandles();
     };
 
-    // 🔧 Draw Candles
     function drawCandles() {
-      ctxPrice.clearRect(0, 0, priceCanvas.width, priceCanvas.height);
-      const w = priceCanvas.width / maxLen;
+      ctx.clearRect(0, 0, priceCanvas.width, priceCanvas.height);
+      const w = priceCanvas.width / maxCandles;
       const h = priceCanvas.height;
-      const prices = candles.flatMap(c => [c.high, c.low]);
+
+      const full = [...candles, currentCandle];
+      const prices = full.flatMap(c => [c.high, c.low]);
       const max = Math.max(...prices);
       const min = Math.min(...prices);
       const range = max - min || 1;
 
-      candles.forEach((c, i) => {
+      full.forEach((c, i) => {
         const x = i * w;
         const oY = h - ((c.open - min) / range) * h;
         const cY = h - ((c.close - min) / range) * h;
@@ -75,27 +80,15 @@
         const lY = h - ((c.low - min) / range) * h;
 
         const color = c.close >= c.open ? "#0f0" : "#f00";
-        ctxPrice.strokeStyle = color;
-        ctxPrice.beginPath();
-        ctxPrice.moveTo(x + w / 2, hY);
-        ctxPrice.lineTo(x + w / 2, lY);
-        ctxPrice.stroke();
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x + w / 2, hY);
+        ctx.lineTo(x + w / 2, lY);
+        ctx.stroke();
 
-        ctxPrice.fillStyle = color;
-        ctxPrice.fillRect(x + 1, Math.min(oY, cY), w - 2, Math.abs(oY - cY));
-
-        // 🔋 Glow pulse
-        const age = Date.now() - c.timestamp;
-        if (age < 500) {
-          const glowAlpha = 1 - age / 500;
-          ctxPrice.beginPath();
-          ctxPrice.arc(x + w / 2, hY - 5, 5, 0, 2 * Math.PI);
-          ctxPrice.fillStyle = `rgba(0, 255, 255, ${glowAlpha})`;
-          ctxPrice.fill();
-        }
+        ctx.fillStyle = color;
+        ctx.fillRect(x + 1, Math.min(oY, cY), w - 2, Math.abs(oY - cY));
       });
-
-      requestAnimationFrame(drawCandles);
     }
   </script>
 </body>
