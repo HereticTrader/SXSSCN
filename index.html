@@ -57,5 +57,99 @@
       <div class="notify">🚦 Speedometer</div>
     </div>
   </div>
+
+  <script>
+    const frontCtx = document.getElementById("frontWindowChart").getContext("2d");
+    const gaugeCtx = document.getElementById("gaugeCanvas").getContext("2d");
+
+    let priceCandles = [];
+    const maxFrontCandles = 50;
+
+    let lastGaugeSpeed = 0;
+
+    function drawFrontChart() {
+      frontCtx.clearRect(0, 0, 1000, 240);
+      if (priceCandles.length < 1) return;
+
+      const w = 1000 / maxFrontCandles;
+      const h = 240;
+      const max = Math.max(...priceCandles.map(c => c.high));
+      const min = Math.min(...priceCandles.map(c => c.low));
+      const range = max - min || 1;
+
+      priceCandles.forEach((c, i) => {
+        const x = i * w;
+        const oY = h - ((c.open - min) / range) * h;
+        const cY = h - ((c.close - min) / range) * h;
+        const hY = h - ((c.high - min) / range) * h;
+        const lY = h - ((c.low - min) / range) * h;
+
+        const color = c.close >= c.open ? "#0f0" : "#f00";
+        frontCtx.strokeStyle = color;
+        frontCtx.beginPath();
+        frontCtx.moveTo(x + w / 2, hY);
+        frontCtx.lineTo(x + w / 2, lY);
+        frontCtx.stroke();
+
+        frontCtx.fillStyle = color;
+        frontCtx.fillRect(x + 1, Math.min(oY, cY), w - 2, Math.abs(oY - cY));
+      });
+
+      frontCtx.fillStyle = "#0ff";
+      frontCtx.font = "12px monospace";
+      frontCtx.fillText(`Price: ${priceCandles[priceCandles.length - 1].close.toFixed(5)}`, 910, 20);
+    }
+
+    function drawGauge(speed) {
+      const ctx = gaugeCtx;
+      ctx.clearRect(0, 0, 200, 200);
+      const radius = 80;
+      const centerX = 100;
+      const centerY = 100;
+
+      const angle = Math.min(speed * 6000, Math.PI); // cap the max angle
+
+      // background arc
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, Math.PI, 2 * Math.PI);
+      ctx.strokeStyle = "#222";
+      ctx.lineWidth = 10;
+      ctx.stroke();
+
+      // active arc
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, Math.PI, Math.PI + angle);
+      ctx.strokeStyle = speed > lastGaugeSpeed ? "lime" : "red";
+      ctx.lineWidth = 10;
+      ctx.stroke();
+
+      // speed text
+      ctx.fillStyle = "#0ff";
+      ctx.font = "16px monospace";
+      ctx.fillText(`${(speed * 100000).toFixed(2)}`, centerX - 30, centerY);
+
+      lastGaugeSpeed = speed;
+    }
+
+    const ws = new WebSocket("wss://fstream.binance.com/ws/alchusdt@kline_1m");
+    ws.onmessage = (event) => {
+      const d = JSON.parse(event.data).k;
+      const candle = {
+        open: parseFloat(d.o),
+        high: parseFloat(d.h),
+        low: parseFloat(d.l),
+        close: parseFloat(d.c)
+      };
+      priceCandles.push(candle);
+      if (priceCandles.length > maxFrontCandles) priceCandles.shift();
+      drawFrontChart();
+    };
+
+    // demo: test gauge curve with simulated pulses
+    setInterval(() => {
+      const fakeSpeed = Math.random() * 0.002;
+      drawGauge(fakeSpeed);
+    }, 1000);
+  </script>
 </body>
 </html>
