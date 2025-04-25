@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Sniffer v10.4 — Real-Time Speed Numbers</title>
+  <title>Sniffer v10.5 — Volume + Delta Pulse</title>
   <style>
     body {
       background: black;
@@ -88,14 +88,15 @@
       const h = 240;
       const max = Math.max(...priceCandles.map(c => c.high));
       const min = Math.min(...priceCandles.map(c => c.low));
+      const volMax = Math.max(...priceCandles.map(c => c.volume || 1));
       const range = max - min || 1;
 
       priceCandles.forEach((c, i) => {
         const x = i * w;
-        const oY = h - ((c.open - min) / range) * h;
-        const cY = h - ((c.close - min) / range) * h;
-        const hY = h - ((c.high - min) / range) * h;
-        const lY = h - ((c.low - min) / range) * h;
+        const oY = h - ((c.open - min) / range) * (h - 40);
+        const cY = h - ((c.close - min) / range) * (h - 40);
+        const hY = h - ((c.high - min) / range) * (h - 40);
+        const lY = h - ((c.low - min) / range) * (h - 40);
 
         const color = c.close >= c.open ? "#0f0" : "#f00";
         frontCtx.strokeStyle = color;
@@ -106,6 +107,11 @@
 
         frontCtx.fillStyle = color;
         frontCtx.fillRect(x + 1, Math.min(oY, cY), w - 2, Math.abs(oY - cY));
+
+        // Volume Bar (light gray)
+        const vHeight = (c.volume || 1) / volMax * 40;
+        frontCtx.fillStyle = "#666";
+        frontCtx.fillRect(x + 1, h - vHeight, w - 2, vHeight);
       });
 
       frontCtx.fillStyle = "#0ff";
@@ -115,12 +121,25 @@
 
     function drawSpeedOverlay() {
       overlayCtx.clearRect(0, 0, 1000, 100);
+      const w = 1000 / speedData.length;
+      const h = 100;
+      overlayCtx.beginPath();
+      speedData.forEach((s, i) => {
+        const x = i * w;
+        const y = h / 2 - Math.max(Math.min((s.up - s.down) * 200000, h / 2), -h / 2);
+        if (i === 0) overlayCtx.moveTo(x, y);
+        else overlayCtx.lineTo(x, y);
+      });
+      overlayCtx.strokeStyle = "#ff0";
+      overlayCtx.lineWidth = 1.5;
+      overlayCtx.stroke();
     }
 
     const tradeSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@trade");
     tradeSocket.onmessage = (event) => {
       const d = JSON.parse(event.data);
       const price = parseFloat(d.p);
+      const vol = parseFloat(d.q);
 
       if (lastPrice !== null) {
         const diff = price - lastPrice;
@@ -132,7 +151,6 @@
       lastPrice = price;
     };
 
-    // Update numerical display every second
     setInterval(() => {
       speedData.push({ up: upSpeed, down: downSpeed });
       if (speedData.length > maxFrontCandles) speedData.shift();
@@ -152,7 +170,8 @@
         open: parseFloat(d.o),
         high: parseFloat(d.h),
         low: parseFloat(d.l),
-        close: parseFloat(d.c)
+        close: parseFloat(d.c),
+        volume: parseFloat(d.v)
       };
       priceCandles.push(candle);
       if (priceCandles.length > maxFrontCandles) priceCandles.shift();
