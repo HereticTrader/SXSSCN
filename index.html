@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Sniffer v6.0 — Candle + Velocity Bars</title>
+  <title>Sniffer v6.1 — Split View</title>
   <style>
     body {
       background: black;
@@ -10,28 +10,37 @@
       font-family: monospace;
       padding: 20px;
     }
-    h1 { color: #0ff; }
+    h1 {
+      color: #0ff;
+    }
     canvas {
       border: 1px solid #0f0;
       background: #111;
       display: block;
-      margin-top: 10px;
+      margin-top: 15px;
     }
   </style>
 </head>
 <body>
-  <h1>ALCH/USDT Sniffer v6.0 — Candles + Vertical Velocity Bars</h1>
-  <canvas id="chart" width="1000" height="400"></canvas>
+  <h1>ALCH/USDT Sniffer v6.1 — Split View</h1>
+
+  <!-- Upper: Traditional Candlestick Chart -->
+  <canvas id="candleCanvas" width="1000" height="300"></canvas>
+
+  <!-- Lower: Velocity Bars + Price Display -->
+  <canvas id="velocityCanvas" width="1000" height="150"></canvas>
 
   <script>
-    const canvas = document.getElementById("chart");
-    const ctx = canvas.getContext("2d");
+    const candleCanvas = document.getElementById("candleCanvas");
+    const velocityCanvas = document.getElementById("velocityCanvas");
+    const ctxCandles = candleCanvas.getContext("2d");
+    const ctxVelocity = velocityCanvas.getContext("2d");
 
     const candles = [];
     const velocities = [];
-    const ema8 = [], ema13 = [], ema21 = [];
-    let lastBid = null, lastAsk = null, lastTime = Date.now();
+    let lastClose = null;
 
+    let lastBid = null, lastAsk = null, lastTime = Date.now();
     const maxLen = 100;
 
     function calculateEMA(data, period) {
@@ -45,17 +54,17 @@
       return emaArray;
     }
 
-    // Klines (1m)
     const klineSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@kline_1m");
     klineSocket.onmessage = (event) => {
       const data = JSON.parse(event.data).k;
       const o = parseFloat(data.o), h = parseFloat(data.h), l = parseFloat(data.l), c = parseFloat(data.c);
       candles.push({ o, h, l, c });
       if (candles.length > maxLen) candles.shift();
-      drawChart();
+      lastClose = c;
+      drawCandles();
+      drawVelocity();
     };
 
-    // Book ticker for velocity
     const bookSocket = new WebSocket("wss://fstream.binance.com/ws/alchusdt@bookTicker");
     bookSocket.onmessage = (event) => {
       const d = JSON.parse(event.data);
@@ -72,19 +81,19 @@
       lastTime = now;
     };
 
-    function drawChart() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const w = canvas.width / candles.length;
-      const h = canvas.height;
+    function drawCandles() {
+      ctxCandles.clearRect(0, 0, candleCanvas.width, candleCanvas.height);
+      const w = candleCanvas.width / candles.length;
+      const h = candleCanvas.height;
       const prices = candles.flatMap(c => [c.h, c.l]);
       const max = Math.max(...prices);
       const min = Math.min(...prices);
       const range = max - min;
 
       const closes = candles.map(c => c.c);
-      const ema8Arr = calculateEMA(closes, 8);
-      const ema13Arr = calculateEMA(closes, 13);
-      const ema21Arr = calculateEMA(closes, 21);
+      const ema8 = calculateEMA(closes, 8);
+      const ema13 = calculateEMA(closes, 13);
+      const ema21 = calculateEMA(closes, 21);
 
       candles.forEach((c, i) => {
         const x = i * w;
@@ -94,46 +103,56 @@
         const lY = h - ((c.l - min) / range) * h;
         const color = c.c >= c.o ? "#0f0" : "#f00";
 
-        // Wicks
-        ctx.strokeStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(x + w / 2, hY);
-        ctx.lineTo(x + w / 2, lY);
-        ctx.stroke();
+        ctxCandles.strokeStyle = color;
+        ctxCandles.beginPath();
+        ctxCandles.moveTo(x + w / 2, hY);
+        ctxCandles.lineTo(x + w / 2, lY);
+        ctxCandles.stroke();
 
-        // Body
-        ctx.fillStyle = color;
-        ctx.fillRect(x + 1, Math.min(oY, cY), w - 2, Math.max(2, Math.abs(oY - cY)));
-
-        // Velocity Bar
-        if (velocities[i]) {
-          const vh = Math.min(velocities[i] * 1000000, h / 5);
-          ctx.fillStyle = "yellow";
-          ctx.fillRect(x + w - 3, hY - vh, 2, vh);
-        }
+        ctxCandles.fillStyle = color;
+        ctxCandles.fillRect(x + 1, Math.min(oY, cY), w - 2, Math.max(2, Math.abs(oY - cY)));
       });
 
-      // EMA lines
-      drawLine(ema8Arr, "#8888ff");
-      drawLine(ema13Arr, "#ffaa00");
-      drawLine(ema21Arr, "#00ffff");
+      drawLine(ctxCandles, ema8, "#8888ff", prices, h, w);
+      drawLine(ctxCandles, ema13, "#ffaa00", prices, h, w);
+      drawLine(ctxCandles, ema21, "#00ffff", prices, h, w);
     }
 
-    function drawLine(arr, color) {
+    function drawLine(ctx, arr, color, priceRange, h, w) {
+      const max = Math.max(...priceRange);
+      const min = Math.min(...priceRange);
+      const range = max - min;
+
       ctx.strokeStyle = color;
       ctx.beginPath();
-      const h = canvas.height;
-      const prices = candles.flatMap(c => [c.h, c.l]);
-      const max = Math.max(...prices);
-      const min = Math.min(...prices);
-      const range = max - min;
       arr.forEach((val, i) => {
         const y = h - ((val - min) / range) * h;
-        const x = i * (canvas.width / candles.length) + 2;
+        const x = i * w + w / 2;
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       });
       ctx.stroke();
+    }
+
+    function drawVelocity() {
+      ctxVelocity.clearRect(0, 0, velocityCanvas.width, velocityCanvas.height);
+      const w = velocityCanvas.width / velocities.length;
+      const h = velocityCanvas.height;
+
+      velocities.forEach((v, i) => {
+        const barHeight = Math.min(v * 1000000, h - 10);
+        const x = i * w;
+        const y = h - barHeight;
+        ctxVelocity.fillStyle = "yellow";
+        ctxVelocity.fillRect(x + w / 2, y, 2, barHeight);
+      });
+
+      // Price label on right
+      if (lastClose !== null) {
+        ctxVelocity.fillStyle = "#0ff";
+        ctxVelocity.font = "16px monospace";
+        ctxVelocity.fillText(`Price: ${lastClose.toFixed(5)}`, velocityCanvas.width - 160, 20);
+      }
     }
   </script>
 </body>
