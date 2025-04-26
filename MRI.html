@@ -2,146 +2,44 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Market MRI - BTCUSDT (Binance Futures)</title>
+  <title>Market MRI - ALPACAAUSDT - Orderbook View</title>
   <style>
     body {
       background: black;
-      color: white;
+      color: #00ffea;
       font-family: monospace;
       text-align: center;
+      font-size: 20px;
     }
-    canvas {
-      border: 1px solid #333;
-      background: black;
-      margin: 10px 0;
-    }
-    h1 {
-      color: #00ffea;
+    #buyVolume, #sellVolume {
+      margin: 20px;
     }
   </style>
 </head>
 <body>
 
-<h1>Market MRI - BTCUSDT (Binance Futures)</h1>
+<h1>ALPACAAUSDT Orderbook Volumes</h1>
 
-<canvas id="imbalanceDelta" width="800" height="150"></canvas>
-<canvas id="volumeDelta" width="800" height="150"></canvas>
-<canvas id="orderbookLines" width="800" height="150"></canvas>
+<div id="buyVolume">Buy Volume: ...</div>
+<div id="sellVolume">Sell Volume: ...</div>
 
 <script>
-// Set up canvas contexts
-const imbalanceDeltaCanvas = document.getElementById('imbalanceDelta').getContext('2d');
-const volumeDeltaCanvas = document.getElementById('volumeDelta').getContext('2d');
-const orderbookLinesCanvas = document.getElementById('orderbookLines').getContext('2d');
-
-const maxDataPoints = 100;
-let imbalanceDeltaData = [];
-let volumeDeltaData = [];
-let bidLineData = [];
-let askLineData = [];
-
-// Connect to Binance WebSockets (BTCUSDT Futures)
-const depthSocket = new WebSocket('wss://fstream.binance.com/ws/btcusdt@depth@100ms');
-const tradeSocket = new WebSocket('wss://fstream.binance.com/ws/btcusdt@aggTrade');
-
-// Orderbook Data
-let bidVolume = 0;
-let askVolume = 0;
-
-// Trades Data
-tradeSocket.onmessage = (event) => {
-  const trade = JSON.parse(event.data);
-  const quantity = parseFloat(trade.q);
-  const isBuyerMaker = trade.m; // true = sell market order, false = buy market order
-
-  const delta = isBuyerMaker ? -quantity : quantity;
-  volumeDeltaData.push(delta);
-
-  if (volumeDeltaData.length > maxDataPoints) volumeDeltaData.shift();
-};
+// Connect to Binance WebSocket for ALPACAAUSDT Depth
+const depthSocket = new WebSocket('wss://fstream.binance.com/ws/alpacausdt@depth@100ms');
 
 depthSocket.onmessage = (event) => {
   const depth = JSON.parse(event.data);
 
-  if (depth.bids && depth.asks) {  // Protection against empty update
-    let bids = depth.bids.map(b => parseFloat(b[1]));
-    let asks = depth.asks.map(a => parseFloat(a[1]));
+  if (depth.bids && depth.asks) {
+    // Sum bids and asks
+    let totalBids = depth.bids.reduce((sum, bid) => sum + parseFloat(bid[1]), 0);
+    let totalAsks = depth.asks.reduce((sum, ask) => sum + parseFloat(ask[1]), 0);
 
-    bidVolume = bids.reduce((a, b) => a + b, 0);
-    askVolume = asks.reduce((a, b) => a + b, 0);
-
-    const imbalanceDelta = (bidVolume - askVolume) / (bidVolume + askVolume);
-
-    imbalanceDeltaData.push(imbalanceDelta);
-    if (imbalanceDeltaData.length > maxDataPoints) imbalanceDeltaData.shift();
-
-    bidLineData.push(bidVolume);
-    askLineData.push(askVolume);
-
-    if (bidLineData.length > maxDataPoints) bidLineData.shift();
-    if (askLineData.length > maxDataPoints) askLineData.shift();
-
-    drawAll();
+    // Update HTML
+    document.getElementById('buyVolume').innerText = 'Buy Volume: ' + totalBids.toFixed(2);
+    document.getElementById('sellVolume').innerText = 'Sell Volume: ' + totalAsks.toFixed(2);
   }
 };
-
-function drawAll() {
-  drawImbalanceDelta();
-  drawVolumeDelta();
-  drawOrderbookLines();
-}
-
-function drawImbalanceDelta() {
-  imbalanceDeltaCanvas.clearRect(0, 0, 800, 150);
-
-  imbalanceDeltaCanvas.beginPath();
-  imbalanceDeltaCanvas.moveTo(0, 75);
-
-  imbalanceDeltaData.forEach((value, index) => {
-    const y = 75 - value * 70;
-    imbalanceDeltaCanvas.lineTo(index * (800 / maxDataPoints), y);
-  });
-
-  imbalanceDeltaCanvas.strokeStyle = imbalanceDeltaData[imbalanceDeltaData.length-1] >= 0 ? 'lime' : 'red';
-  imbalanceDeltaCanvas.stroke();
-}
-
-function drawVolumeDelta() {
-  volumeDeltaCanvas.clearRect(0, 0, 800, 150);
-
-  volumeDeltaData.forEach((value, index) => {
-    const x = index * (800 / maxDataPoints);
-    const y = value >= 0 ? 75 - value * 2 : 75;
-    const height = Math.abs(value * 2);
-
-    volumeDeltaCanvas.fillStyle = value >= 0 ? 'lime' : 'red';
-    volumeDeltaCanvas.fillRect(x, y, 4, height);
-  });
-}
-
-function drawOrderbookLines() {
-  orderbookLinesCanvas.clearRect(0, 0, 800, 150);
-
-  // Draw Bid Line (green)
-  orderbookLinesCanvas.beginPath();
-  bidLineData.forEach((value, index) => {
-    const y = 140 - value * 0.000005;
-    if (index === 0) orderbookLinesCanvas.moveTo(0, y);
-    else orderbookLinesCanvas.lineTo(index * (800 / maxDataPoints), y);
-  });
-  orderbookLinesCanvas.strokeStyle = 'lime';
-  orderbookLinesCanvas.stroke();
-
-  // Draw Ask Line (red)
-  orderbookLinesCanvas.beginPath();
-  askLineData.forEach((value, index) => {
-    const y = 140 - value * 0.000005;
-    if (index === 0) orderbookLinesCanvas.moveTo(0, y);
-    else orderbookLinesCanvas.lineTo(index * (800 / maxDataPoints), y);
-  });
-  orderbookLinesCanvas.strokeStyle = 'red';
-  orderbookLinesCanvas.stroke();
-}
 </script>
 
 </body>
