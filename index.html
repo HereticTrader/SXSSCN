@@ -1,184 +1,147 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Sniffer v11.0 — Transparent Candles & COG Boost</title>
+  <meta charset="UTF-8">
+  <title>Market MRI - ALPACAUSDT</title>
   <style>
     body {
       background: black;
-      color: #0f0;
+      color: white;
       font-family: monospace;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      text-align: center;
     }
     canvas {
-      border: 1px solid #0f0;
-      background: #111;
-      display: block;
-      margin-top: 10px;
+      border: 1px solid #333;
+      background: black;
+      margin: 10px 0;
     }
-    .chart-wrapper {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    #pairInput {
-      margin-top: 10px;
-      padding: 5px;
-      background: #111;
-      color: #0f0;
-      border: 1px solid #0f0;
-      font-family: monospace;
-      font-size: 16px;
-      width: 200px;
-    }
-    #setPair {
-      margin-top: 5px;
-      background: #0f0;
-      border: none;
-      color: black;
-      font-weight: bold;
-      cursor: pointer;
-      padding: 5px 10px;
+    h1 {
+      color: #00ffea;
     }
   </style>
 </head>
 <body>
-  <h1 id="header">🚗 ALCH/USDT — Chart Dashboard</h1>
 
-  <input type="text" id="pairInput" placeholder="Enter pair e.g. arcusdt" />
-  <button id="setPair">Set Pair</button>
+<h1>Market MRI - ALPACAUSDT (Binance Futures)</h1>
 
-  <div class="chart-wrapper">
-    <canvas id="miniOverlayChart" width="1000" height="80"></canvas>
-    <canvas id="frontWindowChart" width="1000" height="240"></canvas>
-    <canvas id="volumeChart" width="1000" height="120"></canvas>
-    <canvas id="imbalanceChart" width="1000" height="120"></canvas>
-  </div>
+<canvas id="imbalanceDelta" width="800" height="150"></canvas>
+<canvas id="volumeDelta" width="800" height="150"></canvas>
+<canvas id="orderbookLines" width="800" height="150"></canvas>
 
-  <script>
-    const miniCanvas = document.getElementById("miniOverlayChart");
-    const frontCanvas = document.getElementById("frontWindowChart");
-    const volumeCanvas = document.getElementById("volumeChart");
-    const imbalanceCanvas = document.getElementById("imbalanceChart");
-    const ctxMini = miniCanvas.getContext("2d");
-    const ctxFront = frontCanvas.getContext("2d");
-    const ctxVolume = volumeCanvas.getContext("2d");
-    const ctxImbalance = imbalanceCanvas.getContext("2d");
+<script>
+// Set up canvas contexts
+const imbalanceDeltaCanvas = document.getElementById('imbalanceDelta').getContext('2d');
+const volumeDeltaCanvas = document.getElementById('volumeDelta').getContext('2d');
+const orderbookLinesCanvas = document.getElementById('orderbookLines').getContext('2d');
 
-    let candles = [];
-    let volumes = [];
-    let orderImbalance = [];
-    let maxCandles = 50;
+const maxDataPoints = 100;
+let imbalanceDeltaData = [];
+let volumeDeltaData = [];
+let bidLineData = [];
+let askLineData = [];
 
-    function drawCandles(ctx, width, height, source, opacity = 1.0) {
-      ctx.clearRect(0, 0, width, height);
-      if (source.length === 0) return;
-      let w = width / source.length;
-      let highs = source.map(c => c.high);
-      let lows = source.map(c => c.low);
-      let max = Math.max(...highs);
-      let min = Math.min(...lows);
+// Connect to Binance WebSockets
+const depthSocket = new WebSocket('wss://fstream.binance.com/ws/alpacausdt@depth@100ms');
+const tradeSocket = new WebSocket('wss://fstream.binance.com/ws/alpacausdt@aggTrade');
 
-      for (let i = 0; i < source.length; i++) {
-        let c = source[i];
-        let x = i * w;
-        let openY = height - ((c.open - min) / (max - min)) * height;
-        let closeY = height - ((c.close - min) / (max - min)) * height;
-        let highY = height - ((c.high - min) / (max - min)) * height;
-        let lowY = height - ((c.low - min) / (max - min)) * height;
-        let color = c.close >= c.open ? `rgba(0,255,0,${opacity})` : `rgba(255,0,0,${opacity})`;
+// Orderbook Data
+let bidVolume = 0;
+let askVolume = 0;
 
-        ctx.strokeStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(x + w / 2, highY);
-        ctx.lineTo(x + w / 2, lowY);
-        ctx.stroke();
+// Trades Data
+tradeSocket.onmessage = (event) => {
+  const trade = JSON.parse(event.data);
+  const quantity = parseFloat(trade.q);
+  const isBuyerMaker = trade.m; // true = sell market order, false = buy market order
 
-        ctx.fillStyle = color;
-        ctx.fillRect(x + 1, Math.min(openY, closeY), w - 2, Math.abs(openY - closeY));
-      }
-    }
+  const delta = isBuyerMaker ? -quantity : quantity;
+  volumeDeltaData.push(delta);
 
-    function drawVolume() {
-      ctxVolume.clearRect(0, 0, volumeCanvas.width, volumeCanvas.height);
-      let w = volumeCanvas.width / volumes.length;
-      let maxVol = Math.max(...volumes.map(v => v.v));
+  if (volumeDeltaData.length > maxDataPoints) volumeDeltaData.shift();
+};
 
-      volumes.forEach((v, i) => {
-        let h = (v.v / maxVol) * volumeCanvas.height;
-        ctxVolume.fillStyle = v.color;
-        ctxVolume.fillRect(i * w + 1, volumeCanvas.height - h, w - 2, h);
-      });
-    }
+depthSocket.onmessage = (event) => {
+  const depth = JSON.parse(event.data);
 
-    function drawImbalanceChart() {
-      ctxImbalance.clearRect(0, 0, imbalanceCanvas.width, imbalanceCanvas.height);
-      let w = imbalanceCanvas.width / orderImbalance.length;
-      let maxVol = Math.max(...orderImbalance.map(o => Math.max(o.buy, o.sell)));
+  let bids = depth.bids.map(b => parseFloat(b[1]));
+  let asks = depth.asks.map(a => parseFloat(a[1]));
 
-      orderImbalance.forEach((o, i) => {
-        let buyH = (o.buy / maxVol) * (imbalanceCanvas.height / 2);
-        let sellH = (o.sell / maxVol) * (imbalanceCanvas.height / 2);
+  bidVolume = bids.reduce((a, b) => a + b, 0);
+  askVolume = asks.reduce((a, b) => a + b, 0);
 
-        ctxImbalance.fillStyle = "rgba(0,255,0,0.5)";
-        ctxImbalance.fillRect(i * w + 1, (imbalanceCanvas.height / 2) - buyH, w - 2, buyH);
+  const imbalanceDelta = (bidVolume - askVolume) / (bidVolume + askVolume);
 
-        ctxImbalance.fillStyle = "rgba(255,0,0,0.5)";
-        ctxImbalance.fillRect(i * w + 1, imbalanceCanvas.height / 2, w - 2, sellH);
-      });
-    }
+  imbalanceDeltaData.push(imbalanceDelta);
+  if (imbalanceDeltaData.length > maxDataPoints) imbalanceDeltaData.shift();
 
-    let klineSocket = null;
-    function connectToPair(pair) {
-      if (klineSocket) klineSocket.close();
-      candles = [];
-      volumes = [];
-      orderImbalance = [];
+  bidLineData.push(bidVolume);
+  askLineData.push(askVolume);
 
-      document.getElementById("header").textContent = `🚗 ${pair.toUpperCase()} — Chart Dashboard`;
+  if (bidLineData.length > maxDataPoints) bidLineData.shift();
+  if (askLineData.length > maxDataPoints) askLineData.shift();
 
-      klineSocket = new WebSocket(`wss://fstream.binance.com/ws/${pair}@kline_1m`);
-      klineSocket.onmessage = event => {
-        const k = JSON.parse(event.data).k;
-        const c = {
-          open: parseFloat(k.o),
-          high: parseFloat(k.h),
-          low: parseFloat(k.l),
-          close: parseFloat(k.c)
-        };
-        const v = {
-          v: parseFloat(k.v),
-          color: c.close >= c.open ? "rgba(0,255,0,0.4)" : "rgba(255,0,0,0.4)"
-        };
+  drawAll();
+};
 
-        let buyVol = 0;
-        let sellVol = 0;
-        if (c.close > c.open) buyVol = v.v;
-        else if (c.close < c.open) sellVol = v.v;
-        orderImbalance.push({ buy: buyVol, sell: sellVol });
+function drawAll() {
+  drawImbalanceDelta();
+  drawVolumeDelta();
+  drawOrderbookLines();
+}
 
-        candles.push(c);
-        volumes.push(v);
-        if (candles.length > maxCandles) candles.shift();
-        if (volumes.length > maxCandles) volumes.shift();
-        if (orderImbalance.length > maxCandles) orderImbalance.shift();
+function drawImbalanceDelta() {
+  imbalanceDeltaCanvas.clearRect(0, 0, 800, 150);
 
-        drawCandles(ctxMini, miniCanvas.width, miniCanvas.height, candles, 1);
-        drawCandles(ctxFront, frontCanvas.width, frontCanvas.height, candles, 0.5);
-        drawVolume();
-        drawImbalanceChart();
-      };
-    }
+  imbalanceDeltaCanvas.beginPath();
+  imbalanceDeltaCanvas.moveTo(0, 75);
 
-    document.getElementById("setPair").onclick = () => {
-      const input = document.getElementById("pairInput").value.trim().toLowerCase();
-      if (input) connectToPair(input);
-    };
+  imbalanceDeltaData.forEach((value, index) => {
+    const y = 75 - value * 70;
+    imbalanceDeltaCanvas.lineTo(index * (800 / maxDataPoints), y);
+  });
 
-    connectToPair("alchusdt");
-  </script>
+  imbalanceDeltaCanvas.strokeStyle = imbalanceDeltaData[imbalanceDeltaData.length-1] >= 0 ? 'lime' : 'red';
+  imbalanceDeltaCanvas.stroke();
+}
+
+function drawVolumeDelta() {
+  volumeDeltaCanvas.clearRect(0, 0, 800, 150);
+
+  volumeDeltaData.forEach((value, index) => {
+    const x = index * (800 / maxDataPoints);
+    const y = value >= 0 ? 75 - value * 2 : 75;
+    const height = Math.abs(value * 2);
+
+    volumeDeltaCanvas.fillStyle = value >= 0 ? 'lime' : 'red';
+    volumeDeltaCanvas.fillRect(x, y, 4, height);
+  });
+}
+
+function drawOrderbookLines() {
+  orderbookLinesCanvas.clearRect(0, 0, 800, 150);
+
+  // Draw Bid Line (green)
+  orderbookLinesCanvas.beginPath();
+  bidLineData.forEach((value, index) => {
+    const y = 140 - value * 0.000005;
+    if (index === 0) orderbookLinesCanvas.moveTo(0, y);
+    else orderbookLinesCanvas.lineTo(index * (800 / maxDataPoints), y);
+  });
+  orderbookLinesCanvas.strokeStyle = 'lime';
+  orderbookLinesCanvas.stroke();
+
+  // Draw Ask Line (red)
+  orderbookLinesCanvas.beginPath();
+  askLineData.forEach((value, index) => {
+    const y = 140 - value * 0.000005;
+    if (index === 0) orderbookLinesCanvas.moveTo(0, y);
+    else orderbookLinesCanvas.lineTo(index * (800 / maxDataPoints), y);
+  });
+  orderbookLinesCanvas.strokeStyle = 'red';
+  orderbookLinesCanvas.stroke();
+}
+</script>
+
 </body>
 </html>
