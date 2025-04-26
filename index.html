@@ -70,6 +70,7 @@
 
     let candles = [];
     let volumes = [];
+    let orderImbalance = [];
     let maxCandles = 50;
 
     function drawCandles(ctx, width, height, source, opacity = 1.0) {
@@ -115,10 +116,18 @@
 
     function drawImbalanceChart() {
       ctxImbalance.clearRect(0, 0, imbalanceCanvas.width, imbalanceCanvas.height);
-      let w = imbalanceCanvas.width / volumes.length;
-      volumes.forEach((v, i) => {
-        ctxImbalance.fillStyle = v.color;
-        ctxImbalance.fillRect(i * w + 1, imbalanceCanvas.height / 2, w - 2, imbalanceCanvas.height / 4);
+      let w = imbalanceCanvas.width / orderImbalance.length;
+      let maxVol = Math.max(...orderImbalance.map(o => Math.max(o.buy, o.sell)));
+
+      orderImbalance.forEach((o, i) => {
+        let buyH = (o.buy / maxVol) * (imbalanceCanvas.height / 2);
+        let sellH = (o.sell / maxVol) * (imbalanceCanvas.height / 2);
+
+        ctxImbalance.fillStyle = "rgba(0,255,0,0.5)";
+        ctxImbalance.fillRect(i * w + 1, (imbalanceCanvas.height / 2) - buyH, w - 2, buyH);
+
+        ctxImbalance.fillStyle = "rgba(255,0,0,0.5)";
+        ctxImbalance.fillRect(i * w + 1, imbalanceCanvas.height / 2, w - 2, sellH);
       });
     }
 
@@ -127,6 +136,7 @@
       if (klineSocket) klineSocket.close();
       candles = [];
       volumes = [];
+      orderImbalance = [];
 
       document.getElementById("header").textContent = `🚗 ${pair.toUpperCase()} — Chart Dashboard`;
 
@@ -143,10 +153,18 @@
           v: parseFloat(k.v),
           color: c.close >= c.open ? "rgba(0,255,0,0.4)" : "rgba(255,0,0,0.4)"
         };
+
+        let buyVol = 0;
+        let sellVol = 0;
+        if (c.close > c.open) buyVol = v.v;
+        else if (c.close < c.open) sellVol = v.v;
+        orderImbalance.push({ buy: buyVol, sell: sellVol });
+
         candles.push(c);
         volumes.push(v);
         if (candles.length > maxCandles) candles.shift();
         if (volumes.length > maxCandles) volumes.shift();
+        if (orderImbalance.length > maxCandles) orderImbalance.shift();
 
         drawCandles(ctxMini, miniCanvas.width, miniCanvas.height, candles, 1);
         drawCandles(ctxFront, frontCanvas.width, frontCanvas.height, candles, 0.5);
