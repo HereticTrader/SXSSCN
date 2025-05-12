@@ -1,147 +1,327 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Market MRI - ALPACAUSDT</title>
-  <style>
-    body {
-      background: black;
-      color: white;
-      font-family: monospace;
-      text-align: center;
-    }
-    canvas {
-      border: 1px solid #333;
-      background: black;
-      margin: 10px 0;
-    }
-    h1 {
-      color: #00ffea;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Binance Futures Candlestick Chart</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/luxon/3.0.1/luxon.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-adapter-luxon/1.2.0/chartjs-adapter-luxon.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .chart-container {
+            position: relative;
+            height: 600px;
+            width: 100%;
+        }
+        select, button {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+            margin-right: 10px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 18px;
+            color: #666;
+        }
+    </style>
 </head>
 <body>
+    <div class="container">
+        <div class="header">
+            <h1>Binance Futures Candlestick Chart</h1>
+            <div>
+                <select id="symbol">
+                    <option value="BTCUSDT">BTC/USDT</option>
+                    <option value="ETHUSDT">ETH/USDT</option>
+                    <option value="BNBUSDT">BNB/USDT</option>
+                    <option value="SOLUSDT">SOL/USDT</option>
+                    <option value="ADAUSDT">ADA/USDT</option>
+                    <option value="DOGEUSDT">DOGE/USDT</option>
+                </select>
+                <select id="interval">
+                    <option value="1m">1 minute</option>
+                    <option value="5m">5 minutes</option>
+                    <option value="15m">15 minutes</option>
+                    <option value="30m">30 minutes</option>
+                    <option value="1h" selected>1 hour</option>
+                    <option value="4h">4 hours</option>
+                    <option value="1d">1 day</option>
+                </select>
+                <button id="fetch">Update Chart</button>
+            </div>
+        </div>
+        <div class="chart-container">
+            <canvas id="chart"></canvas>
+            <div id="loading" class="loading">Loading data...</div>
+        </div>
+    </div>
 
-<h1>Market MRI - ALPACAUSDT (Binance Futures)</h1>
-
-<canvas id="imbalanceDelta" width="800" height="150"></canvas>
-<canvas id="volumeDelta" width="800" height="150"></canvas>
-<canvas id="orderbookLines" width="800" height="150"></canvas>
-
-<script>
-// Set up canvas contexts
-const imbalanceDeltaCanvas = document.getElementById('imbalanceDelta').getContext('2d');
-const volumeDeltaCanvas = document.getElementById('volumeDelta').getContext('2d');
-const orderbookLinesCanvas = document.getElementById('orderbookLines').getContext('2d');
-
-const maxDataPoints = 100;
-let imbalanceDeltaData = [];
-let volumeDeltaData = [];
-let bidLineData = [];
-let askLineData = [];
-
-// Connect to Binance WebSockets
-const depthSocket = new WebSocket('wss://fstream.binance.com/ws/alpacausdt@depth@100ms');
-const tradeSocket = new WebSocket('wss://fstream.binance.com/ws/alpacausdt@aggTrade');
-
-// Orderbook Data
-let bidVolume = 0;
-let askVolume = 0;
-
-// Trades Data
-tradeSocket.onmessage = (event) => {
-  const trade = JSON.parse(event.data);
-  const quantity = parseFloat(trade.q);
-  const isBuyerMaker = trade.m; // true = sell market order, false = buy market order
-
-  const delta = isBuyerMaker ? -quantity : quantity;
-  volumeDeltaData.push(delta);
-
-  if (volumeDeltaData.length > maxDataPoints) volumeDeltaData.shift();
-};
-
-depthSocket.onmessage = (event) => {
-  const depth = JSON.parse(event.data);
-
-  let bids = depth.bids.map(b => parseFloat(b[1]));
-  let asks = depth.asks.map(a => parseFloat(a[1]));
-
-  bidVolume = bids.reduce((a, b) => a + b, 0);
-  askVolume = asks.reduce((a, b) => a + b, 0);
-
-  const imbalanceDelta = (bidVolume - askVolume) / (bidVolume + askVolume);
-
-  imbalanceDeltaData.push(imbalanceDelta);
-  if (imbalanceDeltaData.length > maxDataPoints) imbalanceDeltaData.shift();
-
-  bidLineData.push(bidVolume);
-  askLineData.push(askVolume);
-
-  if (bidLineData.length > maxDataPoints) bidLineData.shift();
-  if (askLineData.length > maxDataPoints) askLineData.shift();
-
-  drawAll();
-};
-
-function drawAll() {
-  drawImbalanceDelta();
-  drawVolumeDelta();
-  drawOrderbookLines();
-}
-
-function drawImbalanceDelta() {
-  imbalanceDeltaCanvas.clearRect(0, 0, 800, 150);
-
-  imbalanceDeltaCanvas.beginPath();
-  imbalanceDeltaCanvas.moveTo(0, 75);
-
-  imbalanceDeltaData.forEach((value, index) => {
-    const y = 75 - value * 70;
-    imbalanceDeltaCanvas.lineTo(index * (800 / maxDataPoints), y);
-  });
-
-  imbalanceDeltaCanvas.strokeStyle = imbalanceDeltaData[imbalanceDeltaData.length-1] >= 0 ? 'lime' : 'red';
-  imbalanceDeltaCanvas.stroke();
-}
-
-function drawVolumeDelta() {
-  volumeDeltaCanvas.clearRect(0, 0, 800, 150);
-
-  volumeDeltaData.forEach((value, index) => {
-    const x = index * (800 / maxDataPoints);
-    const y = value >= 0 ? 75 - value * 2 : 75;
-    const height = Math.abs(value * 2);
-
-    volumeDeltaCanvas.fillStyle = value >= 0 ? 'lime' : 'red';
-    volumeDeltaCanvas.fillRect(x, y, 4, height);
-  });
-}
-
-function drawOrderbookLines() {
-  orderbookLinesCanvas.clearRect(0, 0, 800, 150);
-
-  // Draw Bid Line (green)
-  orderbookLinesCanvas.beginPath();
-  bidLineData.forEach((value, index) => {
-    const y = 140 - value * 0.000005;
-    if (index === 0) orderbookLinesCanvas.moveTo(0, y);
-    else orderbookLinesCanvas.lineTo(index * (800 / maxDataPoints), y);
-  });
-  orderbookLinesCanvas.strokeStyle = 'lime';
-  orderbookLinesCanvas.stroke();
-
-  // Draw Ask Line (red)
-  orderbookLinesCanvas.beginPath();
-  askLineData.forEach((value, index) => {
-    const y = 140 - value * 0.000005;
-    if (index === 0) orderbookLinesCanvas.moveTo(0, y);
-    else orderbookLinesCanvas.lineTo(index * (800 / maxDataPoints), y);
-  });
-  orderbookLinesCanvas.strokeStyle = 'red';
-  orderbookLinesCanvas.stroke();
-}
-</script>
-
+    <script>
+        // Initialize Chart
+        const ctx = document.getElementById('chart').getContext('2d');
+        let candlestickChart;
+        
+        // Function to format the candlestick data for Chart.js
+        function formatCandlestickData(data) {
+            return data.map(candle => {
+                const [timestamp, open, high, low, close] = candle;
+                return {
+                    x: timestamp,
+                    o: parseFloat(open),
+                    h: parseFloat(high),
+                    l: parseFloat(low),
+                    c: parseFloat(close)
+                };
+            });
+        }
+        
+        // Function to create or update the chart
+        function renderChart(data) {
+            const formattedData = formatCandlestickData(data);
+            
+            if (candlestickChart) {
+                candlestickChart.destroy();
+            }
+            
+            // Create a new dataset for the candlestick chart
+            const dataset = {
+                label: document.getElementById('symbol').value,
+                data: formattedData,
+                borderColor: ctx => {
+                    const c = ctx.parsed.c;
+                    const o = ctx.parsed.o;
+                    return c >= o ? 'rgba(75, 192, 75, 1)' : 'rgba(255, 99, 132, 1)';
+                },
+                backgroundColor: ctx => {
+                    const c = ctx.parsed.c;
+                    const o = ctx.parsed.o;
+                    return c >= o ? 'rgba(75, 192, 75, 0.2)' : 'rgba(255, 99, 132, 0.2)';
+                }
+            };
+            
+            // Create the chart
+            candlestickChart = new Chart(ctx, {
+                type: 'candlestick',
+                data: {
+                    datasets: [dataset]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: getTimeUnit(document.getElementById('interval').value)
+                            }
+                        },
+                        y: {
+                            position: 'right'
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const point = context.raw;
+                                    return [
+                                        `Open: ${point.o}`,
+                                        `High: ${point.h}`,
+                                        `Low: ${point.l}`,
+                                        `Close: ${point.c}`
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Function to determine the appropriate time unit based on the selected interval
+        function getTimeUnit(interval) {
+            switch(interval) {
+                case '1m':
+                case '5m':
+                case '15m':
+                case '30m':
+                    return 'minute';
+                case '1h':
+                case '4h':
+                    return 'hour';
+                case '1d':
+                    return 'day';
+                default:
+                    return 'hour';
+            }
+        }
+        
+        // Function to fetch data from Binance Futures API
+        async function fetchCandlestickData() {
+            document.getElementById('loading').style.display = 'block';
+            
+            const symbol = document.getElementById('symbol').value;
+            const interval = document.getElementById('interval').value;
+            const limit = 100; // Number of candles to retrieve
+            
+            try {
+                const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                renderChart(data);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                alert('Failed to fetch data from Binance API. Please try again later.');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+        
+        // Create script for initializing candlestick chart support
+        function initializeCandlestickChart() {
+            // Create and register candlestick chart type
+            class CandlestickElement extends Chart.Element {
+                draw(ctx) {
+                    const {x, o, h, l, c} = this.getProps(['x', 'o', 'h', 'l', 'c']);
+                    const halfWidth = this.width / 2;
+                    
+                    const color = c >= o ? 'rgba(75, 192, 75, 1)' : 'rgba(255, 99, 132, 1)';
+                    const fillColor = c >= o ? 'rgba(75, 192, 75, 0.2)' : 'rgba(255, 99, 132, 0.2)';
+                    
+                    // Draw the high-low line
+                    ctx.beginPath();
+                    ctx.moveTo(x, h);
+                    ctx.lineTo(x, l);
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    
+                    // Draw the candle body
+                    ctx.beginPath();
+                    ctx.fillStyle = fillColor;
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 1;
+                    ctx.fillRect(x - halfWidth, o, this.width, c - o);
+                    ctx.strokeRect(x - halfWidth, o, this.width, c - o);
+                }
+            }
+            
+            Chart.register({
+                id: 'candlestick',
+                defaults: {},
+                controller: class CandlestickController extends Chart.LineController {
+                    draw() {
+                        const meta = this.getMeta();
+                        const elements = meta.data || [];
+                        
+                        for (let i = 0; i < elements.length; i++) {
+                            elements[i].draw(this.chart.ctx);
+                        }
+                    }
+                    
+                    update() {
+                        const me = this;
+                        const meta = me.getMeta();
+                        const dataset = me.getDataset();
+                        const elements = meta.data || [];
+                        
+                        for (let i = 0; i < elements.length; i++) {
+                            const element = elements[i];
+                            const data = dataset.data[i];
+                            
+                            element.x = me.calculatePointX(data);
+                            element.o = me.calculatePointY(data.o);
+                            element.h = me.calculatePointY(data.h);
+                            element.l = me.calculatePointY(data.l);
+                            element.c = me.calculatePointY(data.c);
+                            element.width = me.getBarWidth(data);
+                        }
+                    }
+                    
+                    calculatePointX(data) {
+                        const me = this;
+                        const chart = me.chart;
+                        const scales = chart.scales;
+                        const xScale = scales.x;
+                        
+                        return xScale.getPixelForValue(data.x);
+                    }
+                    
+                    calculatePointY(value) {
+                        const me = this;
+                        const chart = me.chart;
+                        const scales = chart.scales;
+                        const yScale = scales.y;
+                        
+                        return yScale.getPixelForValue(value);
+                    }
+                    
+                    getBarWidth() {
+                        const me = this;
+                        const chart = me.chart;
+                        const scales = chart.scales;
+                        const xScale = scales.x;
+                        
+                        return Math.max(xScale.bandwidth() * 0.8, 1);
+                    }
+                },
+                elements: {
+                    candlestick: CandlestickElement
+                }
+            });
+        }
+        
+        // Initialize candlestick chart support
+        initializeCandlestickChart();
+        
+        // Event listener for the fetch button
+        document.getElementById('fetch').addEventListener('click', fetchCandlestickData);
+        
+        // Fetch data when the page loads
+        document.addEventListener('DOMContentLoaded', fetchCandlestickData);
+    </script>
 </body>
 </html>
